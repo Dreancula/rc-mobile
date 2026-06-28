@@ -21,6 +21,8 @@ class ProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget image;
+
+    // Network image
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       image = Image.network(
         imageUrl,
@@ -33,7 +35,19 @@ class ProductImage extends StatelessWidget {
           return _loadingIndicator();
         },
       );
-    } else if (imageUrl.isNotEmpty) {
+    }
+    // Asset image (starts with 'assets/')
+    else if (imageUrl.startsWith('assets/')) {
+      image = Image.asset(
+        imageUrl,
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (context, error, stackTrace) => _placeholder(),
+      );
+    }
+    // Local file image
+    else if (imageUrl.isNotEmpty) {
       image = Image.file(
         File(imageUrl),
         fit: fit,
@@ -41,7 +55,9 @@ class ProductImage extends StatelessWidget {
         height: height,
         errorBuilder: (context, error, stackTrace) => _placeholder(),
       );
-    } else {
+    }
+    // Empty/placeholder
+    else {
       image = _placeholder();
     }
 

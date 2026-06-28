@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 /// Splash Screen Widget with Logo and Animation
 class SplashScreen extends StatefulWidget {
@@ -116,32 +117,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: AppColors.primaryWhite,
-        borderRadius: BorderRadius.circular(AppConstants.radiusXL),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlack.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: const Center(
-        child: Text(
-          'RC',
-          style: TextStyle(
-            fontSize: 48,
-            fontWeight: FontWeight.w800,
-            color: AppColors.primaryBlack,
-            letterSpacing: 2,
-          ),
-        ),
-      ),
-    );
+    return const AppLogo(size: 120);
   }
 
   Widget _buildBrandName() {

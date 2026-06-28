@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -100,32 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: AppColors.blackGradient,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.pitchBlack.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Text(
-              'RC',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.pureWhite,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ),
+        const AppLogo(size: 56),
         const SizedBox(height: 32),
         Text(
           widget.isAdminMode ? 'Admin Login' : 'Welcome Back',
