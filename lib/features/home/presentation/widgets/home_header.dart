@@ -128,9 +128,8 @@ class HomeHeader extends StatelessWidget {
                   ),
                   child: Text(
                     cartItemCount > 9 ? '9+' : '$cartItemCount',
-                    style: const TextStyle(
+                    style: AppTextStyles.bodyXSmall.copyWith(
                       color: AppColors.primaryWhite,
-                      fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
                     textAlign: TextAlign.center,

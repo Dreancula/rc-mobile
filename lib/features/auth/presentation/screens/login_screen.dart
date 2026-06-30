@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/app_logo.dart';
+import '../../../../core/localization/translations.dart';
+import '../../../../core/localization/language_provider.dart';
+import '../../../home/presentation/screens/about_us_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -26,6 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  int _failedAttempts = 0;
 
   @override
   void dispose() {
@@ -54,18 +60,69 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (result['success'] == true) {
+      _failedAttempts = 0;
       await HiveDb.instance.saveUserSession(
         result['user'] as Map<String, dynamic>,
       );
       if (mounted) widget.onLoginSuccess();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] as String),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      final msg = result['message'] as String;
+      if (msg == 'Password salah' && !widget.isAdminMode) {
+        _failedAttempts++;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Password salah (${_failedAttempts}/3)'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        if (_failedAttempts >= 3) {
+          _failedAttempts = 0;
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (mounted) _promptResetPassword();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openForgotPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
+      ),
+    );
+  }
+
+  Future<void> _promptResetPassword() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Lupa Password?'),
+        content: const Text('Anda sudah 3 kali salah memasukkan password. Ingin reset password?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti', style: TextStyle(color: AppColors.softGrey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset', style: TextStyle(color: AppColors.pitchBlack, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      _openForgotPassword();
     }
   }
 
@@ -86,9 +143,9 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
               _buildLoginButton(),
               const SizedBox(height: 24),
-              _buildDivider(),
-              const SizedBox(height: 24),
               _buildRegisterLink(),
+              const SizedBox(height: 16),
+              _buildAboutLink(),
               const SizedBox(height: 40),
             ],
           ),
@@ -98,13 +155,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildHeader() {
+    final locale = context.watch<LanguageProvider>().locale;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const AppLogo(size: 56),
         const SizedBox(height: 32),
         Text(
-          widget.isAdminMode ? 'Admin Login' : 'Welcome Back',
+          widget.isAdminMode
+              ? Translations.tr('admin_login', locale)
+              : Translations.tr('welcome_back', locale),
           style: const TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.w700,
@@ -116,8 +176,8 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         Text(
           widget.isAdminMode
-              ? 'Sign in as administrator'
-              : 'Sign in to continue shopping',
+              ? Translations.tr('sign_in_admin_desc', locale)
+              : Translations.tr('sign_in_continue', locale),
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,
@@ -153,23 +213,24 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             _buildInputField(
               controller: _emailController,
-              hintText: 'Email address',
+              hintText: Translations.tr('email', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.alternate_email_outlined,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Email is required';
+                  return Translations.tr('email_required', l);
                 }
                 if (!value.contains('@')) {
-                  return 'Enter a valid email';
+                  return Translations.tr('valid_email', l);
                 }
                 return null;
               },
             ),
             const SizedBox(height: 16),
-            _buildInputField(
+              _buildInputField(
               controller: _passwordController,
-              hintText: 'Password',
+              hintText: Translations.tr('password', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.lock_outline_rounded,
               obscureText: _obscurePassword,
               suffixIcon: IconButton(
@@ -185,32 +246,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Password is required';
+                  return Translations.tr('password_required', l);
                 }
                 if (value.length < 6) {
-                  return 'Min. 6 characters';
+                  return Translations.tr('password_min', l);
                 }
                 return null;
               },
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextButton(
-                  onPressed: () {},
-                  child: Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.softGrey,
+            if (!widget.isAdminMode)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton(
+                    onPressed: _openForgotPassword,
+                    child: Text(
+                      Translations.tr('forgot_password', context.watch<LanguageProvider>().locale),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.softGrey,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -319,7 +382,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               )
             : Text(
-                widget.isAdminMode ? 'Sign In as Admin' : 'Sign In',
+                widget.isAdminMode
+                    ? Translations.tr('sign_in_admin', context.watch<LanguageProvider>().locale)
+                    : Translations.tr('sign_in', context.watch<LanguageProvider>().locale),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -331,34 +396,38 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: AppColors.borderGrey)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+  Widget _buildAboutLink() {
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AboutUsScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
-            'or',
+            'Tentang Republik Casual',
             style: TextStyle(
               fontSize: 13,
               color: AppColors.softGrey,
+              decoration: TextDecoration.underline,
             ),
           ),
         ),
-        Expanded(child: Divider(color: AppColors.borderGrey)),
-      ],
+      ),
     );
   }
 
   Widget _buildRegisterLink() {
+    if (widget.isAdminMode) return const SizedBox.shrink();
+
+    final locale = context.watch<LanguageProvider>().locale;
     return Center(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            widget.isAdminMode
-                ? "Not an admin? "
-                : "Don't have an account? ",
+            Translations.tr('dont_have_account', locale),
             style: TextStyle(
               fontSize: 14,
               color: AppColors.softGrey,
@@ -373,7 +442,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                widget.isAdminMode ? 'User Login' : 'Sign Up',
+                Translations.tr('sign_up', locale),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

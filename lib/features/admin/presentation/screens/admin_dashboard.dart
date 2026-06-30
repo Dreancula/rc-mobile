@@ -44,7 +44,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     final avgDaily = delivered.length > 0 ? (totalRevenue / 30) : 0.0;
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      color: AppColors.pitchBlack,
+      onRefresh: () async => setState(() {}),
+      child: SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -154,6 +157,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 32),
         ],
       ),
+    ),
     );
   }
 

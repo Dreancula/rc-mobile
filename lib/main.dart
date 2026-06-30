@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'core/database/hive_db.dart';
+import 'core/services/notification_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/localization/language_provider.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
 import 'features/auth/presentation/screens/auth_screen.dart';
 import 'features/main_navigation/presentation/screens/main_navigation_screen.dart';
@@ -11,6 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await HiveDb.instance.init();
+  NotificationService().initialize();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -20,7 +25,15 @@ void main() async {
     ),
   );
 
-  runApp(const RepublikCasualApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider.value(value: NotificationService()),
+      ],
+      child: const RepublikCasualApp(),
+    ),
+  );
 }
 
 class RepublikCasualApp extends StatefulWidget {
@@ -90,11 +103,24 @@ class _RepublikCasualAppState extends State<RepublikCasualApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Republik Casual',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: _isInitialized ? _currentScreen : _buildLoadingScreen(),
+    return Consumer<LanguageProvider>(
+      builder: (context, langProvider, _) {
+        return MaterialApp(
+          title: 'Republik Casual',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          locale: langProvider.flutterLocale,
+          supportedLocales: const [
+            Locale('en'),
+            Locale('id'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: _isInitialized ? _currentScreen : _buildLoadingScreen(),
+        );
+      },
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import '../models/notification_model.dart';
 import '../../features/home/domain/models/cart_model.dart';
 import '../../features/home/domain/models/order_model.dart';
 import '../../features/home/domain/models/product_model.dart';
@@ -25,8 +26,10 @@ class HiveDb {
   static const String _walletBoxName = 'wallet_box';
   static const String _complaintsBoxName = 'complaints_box';
   static const String _vouchersBoxName = 'vouchers_box';
+  static const String _reviewsBoxName = 'reviews_box';
+  static const String _notificationsBoxName = 'notifications_box';
 
-  static const int _dbVersion = 7;
+  static const int _dbVersion = 10;
   static const String _versionKey = 'db_version';
 
   Box<CartItemModel>? _cartBox;
@@ -39,6 +42,8 @@ class HiveDb {
   Box? _walletBox;
   Box? _complaintsBox;
   Box? _vouchersBox;
+  Box? _reviewsBox;
+  Box? _notificationsBox;
 
   Box<CartItemModel> get cartBox {
     if (_cartBox == null || !_cartBox!.isOpen) {
@@ -110,6 +115,20 @@ class HiveDb {
     return _vouchersBox!;
   }
 
+  Box get reviewsBox {
+    if (_reviewsBox == null || !_reviewsBox!.isOpen) {
+      throw Exception('Reviews box not initialized');
+    }
+    return _reviewsBox!;
+  }
+
+  Box get notificationsBox {
+    if (_notificationsBox == null || !_notificationsBox!.isOpen) {
+      throw Exception('Notifications box not initialized');
+    }
+    return _notificationsBox!;
+  }
+
   Future<void> init() async {
     await Hive.initFlutter();
 
@@ -132,6 +151,8 @@ class HiveDb {
     _walletBox = await Hive.openBox(_walletBoxName);
     _complaintsBox = await Hive.openBox(_complaintsBoxName);
     _vouchersBox = await Hive.openBox(_vouchersBoxName);
+    _reviewsBox = await Hive.openBox(_reviewsBoxName);
+    _notificationsBox = await Hive.openBox(_notificationsBoxName);
 
     await _seedAdminUser();
     await _seedCategories();
@@ -154,6 +175,8 @@ class HiveDb {
         _walletBoxName,
         _complaintsBoxName,
         _vouchersBoxName,
+        _reviewsBoxName,
+        _notificationsBoxName,
       ]) {
         if (Hive.isBoxOpen(name)) {
           await Hive.box(name).close();
@@ -206,75 +229,75 @@ class HiveDb {
         'id': 'prod_1',
         'name': 'Republik Casual T Shirt',
         'price': 149000,
-        'rating': 4.8,
-        'reviewCount': 245,
+        'rating': 0,
+        'reviewCount': 0,
         'imageUrl': 'assets/images/products/T Shirt.png',
         'category': 'T-Shirt',
         'isFavorite': false,
         'isActive': true,
         'description': 'T-shirt katun premium dengan bahan lembut dan nyaman dipakai sehari-hari.',
         'availableSizes': ['S', 'M', 'L', 'XL'],
-        'stock': 50,
+        'stockPerSize': {'S': 50, 'M': 50, 'L': 50, 'XL': 50},
         'weight': 200,
       },
       {
         'id': 'prod_2',
         'name': 'Republik Casual Celana',
         'price': 279000,
-        'rating': 4.4,
-        'reviewCount': 134,
+        'rating': 0,
+        'reviewCount': 0,
         'imageUrl': 'assets/images/products/Celana.png',
         'category': 'Celana',
         'isFavorite': false,
         'isActive': true,
         'description': 'Celana chino slim fit yang nyaman dan cocok untuk berbagai acara.',
         'availableSizes': ['M', 'L', 'XL'],
-        'stock': 25,
+        'stockPerSize': {'M': 25, 'L': 25, 'XL': 25},
         'weight': 400,
       },
       {
         'id': 'prod_3',
         'name': 'Republik Casual Kemeja',
         'price': 249000,
-        'rating': 4.6,
-        'reviewCount': 189,
+        'rating': 0,
+        'reviewCount': 0,
         'imageUrl': 'assets/images/products/Kemeja.png',
         'category': 'Kemeja',
         'isFavorite': false,
         'isActive': true,
         'description': 'Kemeja Oxford slim fit dengan potongan modern dan rapi.',
         'availableSizes': ['M', 'L', 'XL'],
-        'stock': 35,
+        'stockPerSize': {'M': 35, 'L': 35, 'XL': 35},
         'weight': 250,
       },
       {
         'id': 'prod_4',
         'name': 'Republik Casual Hoodie',
         'price': 329000,
-        'rating': 4.9,
-        'reviewCount': 312,
+        'rating': 0,
+        'reviewCount': 0,
         'imageUrl': 'assets/images/products/Hoodie.png',
         'category': 'Hoodie',
         'isFavorite': false,
         'isActive': true,
         'description': 'Hoodie premium dengan bahan cotton fleece yang hangat dan nyaman.',
         'availableSizes': ['S', 'M', 'L', 'XL'],
-        'stock': 30,
+        'stockPerSize': {'S': 30, 'M': 30, 'L': 30, 'XL': 30},
         'weight': 500,
       },
       {
         'id': 'prod_5',
         'name': 'Republik Casual Topi',
         'price': 99000,
-        'rating': 4.5,
-        'reviewCount': 98,
+        'rating': 0,
+        'reviewCount': 0,
         'imageUrl': 'assets/images/products/Topi.png',
         'category': 'Topi',
         'isFavorite': false,
         'isActive': true,
         'description': 'Topi casual stylish untuk melengkapi gaya sehari-hari.',
         'availableSizes': ['One Size'],
-        'stock': 50,
+        'stockPerSize': {'One Size': 50},
         'weight': 100,
       },
     ];
@@ -298,6 +321,7 @@ class HiveDb {
     await _walletBox?.close();
     await _complaintsBox?.close();
     await _vouchersBox?.close();
+    await _reviewsBox?.close();
   }
 
   // ===== AUTH =====
@@ -308,6 +332,8 @@ class HiveDb {
     required String password,
     String address = '',
     String phone = '',
+    String province = '',
+    String city = '',
   }) async {
     if (usersBox.containsKey(email)) {
       return {'success': false, 'message': 'Email sudah terdaftar'};
@@ -321,9 +347,14 @@ class HiveDb {
       'role': 'user',
       'isActive': true,
       'address': address,
+      'province': province,
+      'city': city,
       'phone': phone,
+      'isPhoneVerified': false,
       'voucher': 20000,
       'walletBalance': 0.0,
+      'pointsBalance': 0,
+      'redeemedVouchers': [],
     };
 
     await usersBox.put(email, user);
@@ -409,6 +440,27 @@ class HiveDb {
     await _authBox!.clear();
   }
 
+  String? getAvatarPath() {
+    final path = _authBox?.get('avatar_path') as String?;
+    return (path != null && path.isNotEmpty) ? path : null;
+  }
+
+  Future<void> saveAvatarPath(String path) async {
+    await _authBox!.put('avatar_path', path);
+  }
+
+  Future<void> removeAvatarPath() async {
+    await _authBox!.delete('avatar_path');
+  }
+
+  String getLanguage() {
+    return _authBox?.get('language') as String? ?? 'en';
+  }
+
+  Future<void> saveLanguage(String langCode) async {
+    await _authBox!.put('language', langCode);
+  }
+
   Map<String, String?> getUserContact() {
     final session = getUserSession();
     if (session == null) return {'address': null, 'phone': null};
@@ -432,6 +484,28 @@ class HiveDb {
   String getUserAddress() {
     final contact = getUserContact();
     return contact['address'] ?? '';
+  }
+
+  String getUserProvince() {
+    final session = getUserSession();
+    if (session == null) return '';
+    final email = session['email'] as String?;
+    if (email == null) return '';
+    final raw = usersBox.get(email);
+    if (raw == null) return '';
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    return data['province'] as String? ?? '';
+  }
+
+  String getUserCity() {
+    final session = getUserSession();
+    if (session == null) return '';
+    final email = session['email'] as String?;
+    if (email == null) return '';
+    final raw = usersBox.get(email);
+    if (raw == null) return '';
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    return data['city'] as String? ?? '';
   }
 
   String getUserPhone() {
@@ -500,6 +574,49 @@ class HiveDb {
       data['isActive'] = data['isActive'] == false ? true : false;
       await usersBox.put(email, data);
     }
+  }
+
+  Future<void> saveUser(Map<String, dynamic> userData) async {
+    await usersBox.put(userData['email'] as String, userData);
+  }
+
+  String? getUserEmailById(String userId) {
+    for (final key in usersBox.keys) {
+      final raw = usersBox.get(key);
+      if (raw is Map && raw['id'] == userId) {
+        return key as String?;
+      }
+    }
+    return null;
+  }
+
+  Future<void> deleteUser(String email) async {
+    await usersBox.delete(email);
+  }
+
+  Future<void> markPhoneVerified(String email) async {
+    final raw = usersBox.get(email);
+    if (raw == null || raw is! Map) return;
+    final data = Map<String, dynamic>.from(raw);
+    data['isPhoneVerified'] = true;
+    await usersBox.put(email, data);
+  }
+
+  bool isPhoneVerified(String email) {
+    final raw = usersBox.get(email);
+    if (raw == null || raw is! Map) return false;
+    final data = Map<String, dynamic>.from(raw);
+    return data['isPhoneVerified'] == true;
+  }
+
+  Future<String> resetPassword(String email) async {
+    final raw = usersBox.get(email);
+    if (raw == null || raw is! Map) return '';
+    final data = Map<String, dynamic>.from(raw);
+    final newPass = 'user${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+    data['password'] = newPass;
+    await usersBox.put(email, data);
+    return newPass;
   }
 
   // ===== CART =====
@@ -703,6 +820,59 @@ class HiveDb {
     await usersBox.put(email, data);
   }
 
+  // ===== POINTS =====
+
+  int getPointsBalance() {
+    final session = getUserSession();
+    if (session == null) return 0;
+    final email = session['email'] as String?;
+    if (email == null) return 0;
+    final raw = usersBox.get(email);
+    if (raw == null) return 0;
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    return (data['pointsBalance'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> addPoints(int points) async {
+    final session = getUserSession();
+    if (session == null) return;
+    final email = session['email'] as String?;
+    if (email == null) return;
+    final raw = usersBox.get(email);
+    if (raw == null) return;
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    data['pointsBalance'] = ((data['pointsBalance'] as num?)?.toInt() ?? 0) + points;
+    await usersBox.put(email, data);
+  }
+
+  Future<void> deductPoints(int points) async {
+    final session = getUserSession();
+    if (session == null) return;
+    final email = session['email'] as String?;
+    if (email == null) return;
+    final raw = usersBox.get(email);
+    if (raw == null) return;
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    final current = (data['pointsBalance'] as num?)?.toInt() ?? 0;
+    data['pointsBalance'] = (current - points).clamp(0, current);
+    await usersBox.put(email, data);
+  }
+
+  int getPointsBalanceByEmail(String email) {
+    final raw = usersBox.get(email);
+    if (raw == null) return 0;
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    return (data['pointsBalance'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> setPointsBalanceByEmail(String email, int points) async {
+    final raw = usersBox.get(email);
+    if (raw == null) return;
+    final data = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    data['pointsBalance'] = points;
+    await usersBox.put(email, data);
+  }
+
   Future<void> addTopUpRecord(Map<String, dynamic> record) async {
     final id = record['id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
     await walletBox.put(id, record);
@@ -813,5 +983,209 @@ class HiveDb {
 
   Future<void> deleteVoucher(String id) async {
     await vouchersBox.delete(id);
+  }
+
+  List<String> getRedeemedVoucherIds() {
+    final session = getUserSession();
+    if (session == null) return [];
+    final email = session['email'] as String?;
+    if (email == null) return [];
+    final raw = usersBox.get(email);
+    if (raw == null || raw is! Map) return [];
+    final data = Map<String, dynamic>.from(raw);
+    final list = data['redeemedVouchers'];
+    if (list is List) return list.cast<String>();
+    return [];
+  }
+
+  Future<void> addRedeemedVoucherId(String voucherId) async {
+    final session = getUserSession();
+    if (session == null) return;
+    final email = session['email'] as String?;
+    if (email == null) return;
+    final raw = usersBox.get(email);
+    if (raw == null || raw is! Map) return;
+    final data = Map<String, dynamic>.from(raw);
+    final list = (data['redeemedVouchers'] is List)
+        ? List<String>.from(data['redeemedVouchers'] as List)
+        : <String>[];
+    if (!list.contains(voucherId)) {
+      list.add(voucherId);
+      data['redeemedVouchers'] = list;
+      await usersBox.put(email, data);
+    }
+  }
+
+  List<Map<String, dynamic>> getUserRedeemedVouchers() {
+    final ids = getRedeemedVoucherIds();
+    if (ids.isEmpty) return [];
+    return getActiveVouchers().where((v) {
+      final id = v['id'] as String? ?? '';
+      return ids.contains(id);
+    }).toList();
+  }
+
+  // ===== REVIEWS =====
+
+  Future<void> addReview(Map<String, dynamic> review) async {
+    final id = review['id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
+    await reviewsBox.put(id, review);
+    _updateProductRating(review['productId'] as String);
+  }
+
+  List<Map<String, dynamic>> getProductReviews(String productId) {
+    final list = <Map<String, dynamic>>[];
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final r = Map<String, dynamic>.from(raw);
+      if (r['productId'] == productId) {
+        list.add(r);
+      }
+    }
+    list.sort((a, b) => (b['createdAt'] as String).compareTo(a['createdAt'] as String));
+    return list;
+  }
+
+  List<Map<String, dynamic>> getAllReviews() {
+    final list = <Map<String, dynamic>>[];
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      list.add(Map<String, dynamic>.from(raw));
+    }
+    list.sort((a, b) => (b['createdAt'] as String).compareTo(a['createdAt'] as String));
+    return list;
+  }
+
+  List<Map<String, dynamic>> getReviewsByUserEmail(String userEmail) {
+    final list = <Map<String, dynamic>>[];
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final r = Map<String, dynamic>.from(raw);
+      if (r['userEmail'] == userEmail) {
+        list.add(r);
+      }
+    }
+    list.sort((a, b) => (b['createdAt'] as String).compareTo(a['createdAt'] as String));
+    return list;
+  }
+
+  bool hasUserReviewedProductInOrder(String orderId, String productId, String userEmail) {
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final r = Map<String, dynamic>.from(raw);
+      if (r['orderId'] == orderId && r['productId'] == productId && r['userEmail'] == userEmail) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool hasUserReviewedOrder(String orderId, String userEmail) {
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final r = Map<String, dynamic>.from(raw);
+      if (r['orderId'] == orderId && r['userEmail'] == userEmail) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool hasUserReviewedAllItemsInOrder(String orderId, String userEmail, List<String> productIds) {
+    int reviewedCount = 0;
+    for (final key in reviewsBox.keys) {
+      final raw = reviewsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final r = Map<String, dynamic>.from(raw);
+      if (r['orderId'] == orderId && r['userEmail'] == userEmail && productIds.contains(r['productId'])) {
+        reviewedCount++;
+      }
+    }
+    return reviewedCount >= productIds.length;
+  }
+
+  Future<void> updateReviewReply(String reviewId, String reply) async {
+    final raw = reviewsBox.get(reviewId);
+    if (raw == null || raw is! Map) return;
+    final r = Map<String, dynamic>.from(raw);
+    r['adminReply'] = reply;
+    r['repliedAt'] = DateTime.now().toIso8601String();
+    await reviewsBox.put(reviewId, r);
+  }
+
+  // ===== NOTIFICATIONS =====
+
+  Future<void> saveNotification(NotificationModel notif) async {
+    await notificationsBox.put(notif.id, notif.toMap());
+  }
+
+  List<NotificationModel> getNotifications() {
+    final list = <NotificationModel>[];
+    for (final key in notificationsBox.keys) {
+      final raw = notificationsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      list.add(NotificationModel.fromMap(Map<String, dynamic>.from(raw)));
+    }
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  int getUnreadNotificationCount({String? recipient}) {
+    int count = 0;
+    for (final key in notificationsBox.keys) {
+      final raw = notificationsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      if (raw['isRead'] == true) continue;
+      if (recipient != null) {
+        final r = raw['recipient'] as String? ?? '';
+        if (r != recipient && r != 'both') continue;
+      }
+      count++;
+    }
+    return count;
+  }
+
+  Future<void> markNotificationAsRead(String id) async {
+    final raw = notificationsBox.get(id);
+    if (raw == null || raw is! Map) return;
+    final data = Map<String, dynamic>.from(raw);
+    data['isRead'] = true;
+    await notificationsBox.put(id, data);
+  }
+
+  Future<void> markAllNotificationsAsRead() async {
+    for (final key in notificationsBox.keys) {
+      final raw = notificationsBox.get(key);
+      if (raw == null || raw is! Map) continue;
+      final data = Map<String, dynamic>.from(raw);
+      data['isRead'] = true;
+      await notificationsBox.put(key, data);
+    }
+  }
+
+  Future<void> deleteNotification(String id) async {
+    await notificationsBox.delete(id);
+  }
+
+  void _updateProductRating(String productId) {
+    final reviews = getProductReviews(productId);
+    if (reviews.isEmpty) return;
+    double total = 0;
+    for (final r in reviews) {
+      total += (r['rating'] as num).toDouble();
+    }
+    final avg = total / reviews.length;
+    final product = getProductById(productId);
+    if (product != null) {
+      saveProduct(product.copyWith(
+        rating: double.parse(avg.toStringAsFixed(1)),
+        reviewCount: reviews.length,
+      ));
+    }
   }
 }

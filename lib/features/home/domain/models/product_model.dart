@@ -10,7 +10,7 @@ class ProductModel {
   final bool isActive;
   final String description;
   final List<String> availableSizes;
-  final int stock;
+  final Map<String, int> stockPerSize;
   final double weight;
 
   const ProductModel({
@@ -25,9 +25,13 @@ class ProductModel {
     this.isActive = true,
     this.description = '',
     this.availableSizes = const ['S', 'M', 'L', 'XL'],
-    this.stock = 0,
+    this.stockPerSize = const {},
     this.weight = 200,
   });
+
+  int get stock => stockPerSize.values.fold(0, (sum, s) => sum + s);
+
+  int stockForSize(String size) => stockPerSize[size] ?? 0;
 
   ProductModel copyWith({
     String? id,
@@ -41,7 +45,7 @@ class ProductModel {
     bool? isActive,
     String? description,
     List<String>? availableSizes,
-    int? stock,
+    Map<String, int>? stockPerSize,
     double? weight,
   }) {
     return ProductModel(
@@ -56,12 +60,22 @@ class ProductModel {
       isActive: isActive ?? this.isActive,
       description: description ?? this.description,
       availableSizes: availableSizes ?? this.availableSizes,
-      stock: stock ?? this.stock,
+      stockPerSize: stockPerSize ?? this.stockPerSize,
       weight: weight ?? this.weight,
     );
   }
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
+    final rawStockPerSize = map['stockPerSize'];
+    final sizes = (map['availableSizes'] as List?)?.cast<String>() ??
+        ['S', 'M', 'L', 'XL'];
+    Map<String, int> stockPerSize;
+    if (rawStockPerSize is Map) {
+      stockPerSize = rawStockPerSize.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+    } else {
+      final legacyStock = map['stock'] as int? ?? 0;
+      stockPerSize = {for (final s in sizes) s: legacyStock ~/ sizes.length};
+    }
     return ProductModel(
       id: map['id'] as String,
       name: map['name'] as String,
@@ -73,9 +87,8 @@ class ProductModel {
       isFavorite: map['isFavorite'] as bool? ?? false,
       isActive: map['isActive'] as bool? ?? true,
       description: map['description'] as String? ?? '',
-      availableSizes: (map['availableSizes'] as List?)?.cast<String>() ??
-          ['S', 'M', 'L', 'XL'],
-      stock: map['stock'] as int? ?? 0,
+      availableSizes: sizes,
+      stockPerSize: stockPerSize,
       weight: (map['weight'] as num?)?.toDouble() ?? 200,
     );
   }
@@ -93,7 +106,7 @@ class ProductModel {
       'isActive': isActive,
       'description': description,
       'availableSizes': availableSizes,
-      'stock': stock,
+      'stockPerSize': stockPerSize,
       'weight': weight,
     };
   }

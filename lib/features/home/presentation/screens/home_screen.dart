@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/database/hive_db.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/custom_icons.dart';
 import '../../../../core/widgets/product_image.dart';
 import '../../data/repositories/cart_repository.dart';
+import '../../../notifications/presentation/screens/notification_screen.dart';
 import '../../domain/models/product_model.dart';
+import '../../domain/models/category_model.dart';
 import 'product_detail_screen.dart';
 import 'search_screen.dart';
 import 'cart_screen.dart';
@@ -14,8 +18,8 @@ import 'checkout_screen.dart';
 import 'chat_screen.dart';
 import 'category_screen.dart';
 import 'top_up_screen.dart';
+import 'points_screen.dart';
 
-/// Home Screen - Clean Modern & Elegant Monochrome Design
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onSearchTap;
   final VoidCallback? onCartTap;
@@ -40,18 +44,29 @@ class _HomeScreenState extends State<HomeScreen> {
   final CartRepository _cartRepository = CartRepository();
   int _cartItemCount = 0;
 
-  static const Map<String, IconData> _categoryIcons = {
-    'All': Icons.grid_view_rounded,
-    'T-Shirt': Icons.checkroom_outlined,
-    'Shirt': Icons.dry_cleaning_outlined,
-    'Pants': Icons.straighten_outlined,
-    'Jacket': Icons.layers_outlined,
-    'Accessories': Icons.watch_outlined,
+  static const Map<String, IconData> _iconPathMap = {
+    'tshirt': Icons.checkroom_outlined,
+    'shirt': Icons.dry_cleaning_outlined,
+    'pants': Icons.straighten,
+    'hoodie': Icons.layers_outlined,
+    'accessories': Icons.watch_outlined,
+    'hat': Icons.watch_outlined,
+    'jacket': Icons.layers_outlined,
   };
 
-  List<String> get _categories {
-    final cats = _db.getCategories().map((c) => c.name).toList();
-    cats.insert(0, 'All');
+  static const Map<String, Color> _iconColorMap = {
+    'tshirt': Color(0xFFE74C3C),
+    'shirt': Color(0xFF3498DB),
+    'pants': Color(0xFF2ECC71),
+    'hoodie': Color(0xFFE67E22),
+    'accessories': Color(0xFF9B59B6),
+    'hat': Color(0xFF9B59B6),
+    'jacket': Color(0xFFE67E22),
+  };
+
+  List<CategoryModel> get _categories {
+    final cats = _db.getCategories();
+    cats.insert(0, CategoryModel(id: 'all', name: 'All'));
     return cats;
   }
 
@@ -107,9 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => SearchScreen(
-          onProductTap: _onProductTap,
-        ),
+        builder: (context) => SearchScreen(onProductTap: _onProductTap),
       ),
     );
   }
@@ -118,14 +131,14 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-          builder: (context) => CartScreen(
-            onCheckout: _navigateToCheckout,
-            onContinueShopping: () => Navigator.pop(context),
-            onProductTap: (productId) {
-              final product = _db.getProductById(productId) ?? _products.first;
-              _onProductTap(product);
-            },
-          ),
+        builder: (context) => CartScreen(
+          onCheckout: _navigateToCheckout,
+          onContinueShopping: () => Navigator.pop(context),
+          onProductTap: (productId) {
+            final product = _db.getProductById(productId) ?? _products.first;
+            _onProductTap(product);
+          },
+        ),
       ),
     ).then((_) => _updateCartCount());
   }
@@ -163,13 +176,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pureWhite,
+      backgroundColor: AppColors.offWhite,
       body: SafeArea(
         child: Column(
           children: [
-            // ===== STICKY HEADER =====
             _buildHeader(),
-            // ===== SCROLLABLE CONTENT =====
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.pitchBlack,
@@ -180,46 +191,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 child: CustomScrollView(
                   slivers: [
-                    // ===== DOMPET DIGITAL SECTION =====
                     SliverToBoxAdapter(
-                      child: _buildDompetCard(),
-                    ),
-
-                    // ===== CATEGORIES SECTION =====
-                    const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingL)),
-                    SliverToBoxAdapter(
-                      child: _buildSectionHeader(
-                        title: 'Kategori',
-                        onViewAll: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CategoryScreen()),
-                        ),
+                      child: Column(
+                        children: [
+                          _buildDompetCard(),
+                          const SizedBox(height: AppConstants.spacingL),
+                          _buildSectionHeader(
+                            title: 'Kategori',
+                            onViewAll: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CategoryScreen(),
+                              ),
+                            ),
+                          ),
+                          _buildCategories(),
+                          const SizedBox(height: AppConstants.spacingL),
+                          _buildSectionHeader(
+                            title: _selectedCategory == 'All'
+                                ? 'Produk'
+                                : _selectedCategory,
+                            onViewAll: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CategoryScreen(),
+                              ),
+                            ),
+                          ),
+                          _buildProductGrid(),
+                          const SizedBox(height: AppConstants.spacingXXL),
+                        ],
                       ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: _buildCategories(),
-                    ),
-
-                    // ===== PRODUCTS SECTION =====
-                    const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingL)),
-                    SliverToBoxAdapter(
-                      child: _buildSectionHeader(
-                        title: _selectedCategory == 'All'
-                            ? 'Produk'
-                            : _selectedCategory,
-                        onViewAll: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CategoryScreen()),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: _buildProductGrid(),
-                    ),
-
-                    // Bottom Padding
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: AppConstants.spacingXXL),
                     ),
                   ],
                 ),
@@ -231,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===== HEADER WIDGET =====
+  // ===== HEADER =====
   Widget _buildHeader() {
     final userName = _db.getUserSession()?['name'] ?? 'User';
     return Container(
@@ -243,13 +245,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       decoration: BoxDecoration(
         color: AppColors.pureWhite,
-        border: Border(
-          bottom: BorderSide(color: AppColors.borderGrey),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.borderGrey)),
       ),
       child: Row(
         children: [
-          // Greeting Section
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,18 +256,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 RichText(
                   text: TextSpan(
                     children: [
-                      const TextSpan(
+                      TextSpan(
                         text: 'Hey, ',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
+                        style: AppTextStyles.heading2.copyWith(
                           color: AppColors.pitchBlack,
-                          letterSpacing: -0.5,
                         ),
                       ),
                       TextSpan(
                         text: userName,
-                        style: AppTextStyles.heading3.copyWith(
+                        style: AppTextStyles.heading2.copyWith(
                           color: AppColors.pitchBlack,
                         ),
                       ),
@@ -286,25 +282,37 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
-          // Action Buttons Row
           Row(
             children: [
-              // Search Button
               SquircleIconButton(
                 icon: Icons.search_rounded,
                 onTap: _navigateToSearch,
               ),
               const SizedBox(width: AppConstants.spacingS),
-
-              // Chat Button
               SquircleIconButton(
                 icon: Icons.chat_outlined,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChatScreen()),
+                ),
               ),
               const SizedBox(width: AppConstants.spacingS),
-
-              // Cart Button with Badge
+              Consumer<NotificationService>(
+                builder: (context, notifService, _) {
+                  final count = notifService.unreadUserCount;
+                  return SquircleIconButton(
+                    icon: Icons.notifications_outlined,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationScreen(recipient: 'user'),
+                      ),
+                    ),
+                    badgeCount: count > 0 ? count : null,
+                  );
+                },
+              ),
+              const SizedBox(width: AppConstants.spacingS),
               SquircleIconButton(
                 icon: Icons.shopping_bag_outlined,
                 onTap: _navigateToCart,
@@ -317,9 +325,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===== DOMPET DIGITAL CARD =====
+  // ===== DOMPET CARD =====
   Widget _buildDompetCard() {
     final balance = _db.getWalletBalance();
+    final points = _db.getPointsBalance();
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppConstants.spacingM,
@@ -365,17 +374,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppColors.pureWhite,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add, size: 16, color: AppColors.primaryBlack),
+                        Icon(
+                          Icons.add,
+                          size: 16,
+                          color: AppColors.primaryBlack,
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'Top Up',
-                          style: TextStyle(
+                          style: AppTextStyles.labelMedium.copyWith(
                             color: AppColors.primaryBlack,
                             fontWeight: FontWeight.w600,
-                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -387,25 +399,56 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
             Text(
               'Dompet Digital RC',
-              style: TextStyle(
+              style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.pureWhite.withValues(alpha: 0.7),
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
               ),
             ),
             const SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  'Rp ${balance.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                  style: const TextStyle(
-                    color: AppColors.pureWhite,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
+            Text(
+              'Rp ${balance.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+              style: AppTextStyles.heading1.copyWith(
+                fontSize: 28,
+                color: AppColors.pureWhite,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PointsScreen()),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.pureWhite.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.stars_rounded,
+                      size: 18,
+                      color: AppColors.pureWhite.withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$points Poin',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.pureWhite,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AppColors.pureWhite.withValues(alpha: 0.6),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -413,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===== SECTION HEADER WIDGET =====
+  // ===== SECTION HEADER =====
   Widget _buildSectionHeader({
     required String title,
     required VoidCallback onViewAll,
@@ -426,30 +469,42 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: AppTextStyles.heading4.copyWith(
-              color: AppColors.pitchBlack,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(
+                  gradient: AppColors.blackGradient,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: AppTextStyles.heading4.copyWith(
+                  color: AppColors.pitchBlack,
+                ),
+              ),
+            ],
           ),
           GestureDetector(
             onTap: onViewAll,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacingS,
-                vertical: AppConstants.spacingXS,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(AppConstants.radiusS),
-              ),
-              child: Text(
-                'Lihat Semua',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.charcoal,
-                  fontWeight: FontWeight.w500,
+            child: Row(
+              children: [
+                Text(
+                  'Lihat Semua',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.charcoal,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 10,
+                  color: AppColors.charcoal,
+                ),
+              ],
             ),
           ),
         ],
@@ -457,77 +512,77 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===== CATEGORIES WIDGET =====
+  // ===== CATEGORIES =====
   Widget _buildCategories() {
     return SizedBox(
-      height: 100,
+      height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
         itemCount: _categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: AppConstants.spacingM),
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          final isSelected = category == _selectedCategory;
-          return _buildCategoryItem(category, isSelected);
-        },
+        separatorBuilder: (context, index) =>
+            const SizedBox(width: AppConstants.spacingM),
+          itemBuilder: (context, index) {
+            final category = _categories[index];
+            final isSelected = category.name == _selectedCategory;
+            return _buildCategoryItem(category, isSelected);
+          },
       ),
     );
   }
 
-  Widget _buildCategoryItem(String category, bool isSelected) {
-    final iconData = _categoryIcons[category] ?? Icons.category_outlined;
+  Widget _buildCategoryItem(CategoryModel category, bool isSelected) {
+    final iconPath = category.iconPath ?? '';
+    final iconData = _iconPathMap[iconPath] ?? Icons.category_outlined;
+    final iconColor = _iconColorMap[iconPath] ?? AppColors.charcoal;
 
     return GestureDetector(
-      onTap: () => _onCategorySelected(category),
+      onTap: () => _onCategorySelected(category.name),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Squircle Icon Container
-          AnimatedContainer(
-            duration: AppConstants.animationFast,
-            width: 64,
-            height: 64,
+          Container(
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
               color: isSelected ? AppColors.pitchBlack : AppColors.pureWhite,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isSelected ? AppColors.pitchBlack : AppColors.borderGrey,
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isSelected
-                      ? AppColors.pitchBlack.withValues(alpha: 0.15)
-                      : AppColors.pitchBlack.withValues(alpha: 0.05),
-                  blurRadius: isSelected ? 12 : 8,
-                  offset: const Offset(0, 4),
+                  color: AppColors.pitchBlack.withValues(
+                    alpha: isSelected ? 0.12 : 0.04,
+                  ),
+                  blurRadius: isSelected ? 10 : 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Icon(
               iconData,
-              size: 28,
-              color: isSelected ? AppColors.pureWhite : AppColors.charcoal,
+              size: 26,
+              color: isSelected ? AppColors.pureWhite : iconColor,
             ),
           ),
-          const SizedBox(height: AppConstants.spacingS),
-
-          // Category Label
+          const SizedBox(height: 6),
           Text(
-            category,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              color: isSelected ? AppColors.pitchBlack : AppColors.softGrey,
+            category.name,
+            style: AppTextStyles.caption.copyWith(
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? AppColors.pitchBlack : AppColors.charcoal,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  // ===== PRODUCT GRID WIDGET =====
+  // ===== PRODUCT GRID =====
   Widget _buildProductGrid() {
     if (_products.isEmpty) {
       return _buildEmptyState();
@@ -553,6 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ===== PRODUCT CARD =====
   Widget _buildProductCard(ProductModel product) {
     return GestureDetector(
       onTap: () => _onProductTap(product),
@@ -576,7 +632,6 @@ class _HomeScreenState extends State<HomeScreen> {
               flex: 3,
               child: Stack(
                 children: [
-                  // Product Image
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(16),
@@ -589,26 +644,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
-                  // Rating Badge - Top Left
+                  // Rating Badge
                   Positioned(
-                    top: AppConstants.spacingS,
-                    left: AppConstants.spacingS,
+                    top: 8,
+                    left: 8,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 6,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        gradient: AppColors.blackGradient,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.pitchBlack.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        color: AppColors.pitchBlack.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -616,13 +663,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           const Icon(
                             Icons.star_rounded,
                             color: Colors.amber,
-                            size: 14,
+                            size: 12,
                           ),
                           const SizedBox(width: 2),
                           Text(
                             '${product.rating}',
-                            style: const TextStyle(
-                              fontSize: 11,
+                            style: AppTextStyles.bodyXSmall.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.pureWhite,
                             ),
@@ -631,83 +677,97 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
-                  // Favorite Button - Top Right
+                  // Favorite Button
                   Positioned(
-                    top: AppConstants.spacingS,
-                    right: AppConstants.spacingS,
+                    top: 8,
+                    right: 8,
                     child: GestureDetector(
                       onTap: () => _onFavoriteTap(product),
                       child: Container(
-                        width: 32,
-                        height: 32,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
                           color: AppColors.pureWhite,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.pitchBlack.withValues(alpha: 0.15),
-                              blurRadius: 6,
+                              color: AppColors.pitchBlack.withValues(
+                                alpha: 0.1,
+                              ),
+                              blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Icon(
                           product.isFavorite
-                              ? Icons.favorite
-                              : Icons.favorite_border,
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
                           color: product.isFavorite
-                              ? AppColors.error
+                              ? Colors.red.shade400
                               : AppColors.softGrey,
-                          size: 18,
+                          size: 16,
                         ),
                       ),
                     ),
                   ),
+                  // Stock Badge
+                  if (product.stock <= 5 && product.stock > 0)
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Stok Terbatas',
+                          style: AppTextStyles.bodyXSmall.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.pureWhite,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-
             // Info Section
             Expanded(
               flex: 2,
               child: Padding(
-                padding: const EdgeInsets.all(AppConstants.spacingM),
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Product Name
                     Text(
                       product.name,
-                      style: const TextStyle(
-                        fontSize: 13,
+                      style: AppTextStyles.labelMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.pitchBlack,
-                        height: 1.3,
+                        height: 1.2,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const Spacer(),
-
-                    // Price
                     Text(
                       _formatPrice(product.price),
-                      style: const TextStyle(
-                        fontSize: 15,
+                      style: AppTextStyles.priceTextSmall.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppColors.pitchBlack,
-                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(height: 4),
-
-                    // Review Count
+                    const SizedBox(height: 2),
                     Text(
-                      '${product.reviewCount} reviews',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
+                      product.reviewCount > 0
+                          ? '${product.reviewCount} ulasan'
+                          : 'Baru',
+                      style: AppTextStyles.bodyXSmall.copyWith(
                         color: AppColors.softGrey,
                       ),
                     ),
@@ -729,24 +789,22 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 70,
+              height: 70,
               decoration: BoxDecoration(
                 color: AppColors.lightGrey,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Icon(
                 Icons.inventory_2_outlined,
-                size: 40,
+                size: 35,
                 color: AppColors.softGrey,
               ),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'Tidak ada produk',
-              style: AppTextStyles.heading4.copyWith(
-                color: AppColors.charcoal,
-              ),
+              style: AppTextStyles.heading4.copyWith(color: AppColors.charcoal),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(

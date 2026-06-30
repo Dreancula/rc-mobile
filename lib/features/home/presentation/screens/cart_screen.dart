@@ -58,7 +58,7 @@ class _CartScreenState extends State<CartScreen> {
             },
             child: Text(
               'Hapus',
-              style: TextStyle(color: AppColors.error),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
             ),
           ),
         ],
@@ -121,7 +121,7 @@ class _CartScreenState extends State<CartScreen> {
                       },
                       child: Text(
                         'Kosongkan',
-                        style: TextStyle(color: AppColors.error),
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
                       ),
                     ),
                   ],

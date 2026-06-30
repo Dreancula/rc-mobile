@@ -5,6 +5,7 @@ import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../auth/presentation/screens/otp_verification_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -19,6 +20,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneCtrl = TextEditingController();
   String? _photoPath;
   bool _saving = false;
+  String _originalPhone = '';
 
   @override
   void initState() {
@@ -26,7 +28,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final session = HiveDb.instance.getUserSession();
     _nameCtrl.text = session?['name'] as String? ?? '';
     _emailCtrl.text = session?['email'] as String? ?? '';
-    _phoneCtrl.text = HiveDb.instance.getUserPhone();
+    _originalPhone = HiveDb.instance.getUserPhone();
+    _phoneCtrl.text = _originalPhone;
     _photoPath = HiveDb.instance.getUserPhoto();
   }
 
@@ -46,26 +49,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _save() async {
+  void _save() async {
     if (_nameCtrl.text.trim().isEmpty) return;
     setState(() => _saving = true);
 
+    final newPhone = _phoneCtrl.text.trim();
+    final phoneChanged = newPhone.isNotEmpty && newPhone != _originalPhone;
+
     await HiveDb.instance.updateUserProfile({
       'name': _nameCtrl.text.trim(),
-      'phone': _phoneCtrl.text.trim(),
       'photo': _photoPath,
     });
 
     if (!mounted) return;
     setState(() => _saving = false);
-    Navigator.pop(context, true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Profil berhasil diperbarui'),
-        backgroundColor: AppColors.primaryBlack,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+
+    if (phoneChanged) {
+      final session = HiveDb.instance.getUserSession();
+      final email = session?['email'] as String?;
+      if (email != null) {
+        final verified = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(
+              email: email,
+              phone: newPhone,
+              onVerified: () {
+                HiveDb.instance.updateUserProfile({'phone': newPhone, 'isPhoneVerified': true});
+                Navigator.pop(context, true);
+              },
+            ),
+          ),
+        );
+        if (mounted && verified == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profil berhasil diperbarui'), backgroundColor: AppColors.primaryBlack, behavior: SnackBarBehavior.floating),
+          );
+          Navigator.pop(context, true);
+        } else if (mounted) {
+          Navigator.pop(context, true);
+        }
+        return;
+      }
+    }
+
+    await HiveDb.instance.updateUserProfile({'phone': newPhone});
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profil berhasil diperbarui'), backgroundColor: AppColors.primaryBlack, behavior: SnackBarBehavior.floating),
+      );
+      Navigator.pop(context, true);
+    }
   }
 
   @override

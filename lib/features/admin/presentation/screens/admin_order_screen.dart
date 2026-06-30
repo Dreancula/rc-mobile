@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rc_mobile_v2/core/database/hive_db.dart';
 import 'package:rc_mobile_v2/core/theme/app_colors.dart';
+import 'package:rc_mobile_v2/core/widgets/product_image.dart';
 import 'package:rc_mobile_v2/features/home/domain/models/order_model.dart';
 import 'package:rc_mobile_v2/features/home/data/repositories/order_repository.dart';
 
@@ -311,7 +312,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                           Container(
                             width: 48, height: 48,
                             decoration: BoxDecoration(color: AppColors.borderGrey, borderRadius: BorderRadius.circular(8)),
-                            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, color: AppColors.softGrey))),
+                            child: ProductImage(imageUrl: item.imageUrl, width: 48, height: 48),
                           ),
                           const SizedBox(width: 12),
                           Expanded(child: Text(item.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.pitchBlack))),

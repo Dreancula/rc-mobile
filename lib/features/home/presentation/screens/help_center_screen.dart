@@ -70,9 +70,8 @@ class HelpCenterScreen extends StatelessWidget {
                     child: Center(
                       child: Text(
                         '${index + 1}',
-                        style: const TextStyle(
+                        style: AppTextStyles.caption.copyWith(
                           color: AppColors.pureWhite,
-                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

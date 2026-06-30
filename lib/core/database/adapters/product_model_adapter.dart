@@ -7,20 +7,39 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
 
   @override
   ProductModel read(BinaryReader reader) {
+    final id = reader.readString();
+    final name = reader.readString();
+    final price = reader.readDouble();
+    final rating = reader.readDouble();
+    final reviewCount = reader.readInt();
+    final imageUrl = reader.readString();
+    final category = reader.readString();
+    final isFavorite = reader.readBool();
+    final isActive = reader.readBool();
+    final description = reader.readString();
+    final sizes = reader.readStringList() ?? ['S', 'M', 'L', 'XL'];
+    final sizeStock = <String, int>{};
+    final count = reader.readInt();
+    for (int i = 0; i < count; i++) {
+      final size = reader.readString();
+      final qty = reader.readInt();
+      sizeStock[size] = qty;
+    }
+    final weight = reader.readDouble();
     return ProductModel(
-      id: reader.readString(),
-      name: reader.readString(),
-      price: reader.readDouble(),
-      rating: reader.readDouble(),
-      reviewCount: reader.readInt(),
-      imageUrl: reader.readString(),
-      category: reader.readString(),
-      isFavorite: reader.readBool(),
-      isActive: reader.readBool(),
-      description: reader.readString(),
-      availableSizes: reader.readStringList() ?? ['S', 'M', 'L', 'XL'],
-      stock: reader.readInt(),
-      weight: reader.readDouble(),
+      id: id,
+      name: name,
+      price: price,
+      rating: rating,
+      reviewCount: reviewCount,
+      imageUrl: imageUrl,
+      category: category,
+      isFavorite: isFavorite,
+      isActive: isActive,
+      description: description,
+      availableSizes: sizes,
+      stockPerSize: sizeStock,
+      weight: weight,
     );
   }
 
@@ -37,7 +56,11 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
     writer.writeBool(obj.isActive);
     writer.writeString(obj.description);
     writer.writeStringList(obj.availableSizes);
-    writer.writeInt(obj.stock);
+    writer.writeInt(obj.stockPerSize.length);
+    for (final entry in obj.stockPerSize.entries) {
+      writer.writeString(entry.key);
+      writer.writeInt(entry.value);
+    }
     writer.writeDouble(obj.weight);
   }
 }

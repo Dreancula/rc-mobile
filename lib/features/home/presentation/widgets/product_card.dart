@@ -101,8 +101,8 @@ class ProductCard extends StatelessWidget {
                     // Product Name
                     Text(
                       product.name,
-                      style: AppTextStyles.labelLarge.copyWith(
-                        fontSize: 13,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -111,8 +111,8 @@ class ProductCard extends StatelessWidget {
                     // Price
                     Text(
                       _formatPrice(product.price),
-                      style: AppTextStyles.priceText.copyWith(
-                        fontSize: 14,
+                      style: AppTextStyles.priceTextSmall.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: AppConstants.spacingXS),
@@ -131,10 +131,11 @@ class ProductCard extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        Text(
-                          ' (${product.reviewCount})',
-                          style: AppTextStyles.caption,
-                        ),
+                        if (product.reviewCount > 0)
+                          Text(
+                            ' (${product.reviewCount})',
+                            style: AppTextStyles.caption,
+                          ),
                       ],
                     ),
                   ],

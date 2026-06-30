@@ -229,4 +229,15 @@ class ShippingCalculator {
       estimatedDistanceKm: distance,
     );
   }
+
+  /// Calculate shipping using a known city name (bypasses address parsing).
+  static ShippingResult calculateFromCity(
+      String city, double totalWeightGrams) {
+    final distance = _cityDistances[city] ?? estimateDistance(city);
+    final options = calculateOptions(totalWeightGrams, distance);
+    return ShippingResult(
+      options: options,
+      estimatedDistanceKm: distance,
+    );
+  }
 }

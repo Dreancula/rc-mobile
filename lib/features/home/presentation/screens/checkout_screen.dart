@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/product_image.dart';
 import '../../data/repositories/cart_repository.dart';
 import '../../data/repositories/order_repository.dart';
@@ -34,12 +33,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   ShippingResult? _shippingResult;
   bool _shippingLoading = false;
 
-  double? _voucherDiscount;
+  List<Map<String, dynamic>> _availableVouchers = [];
+  Map<String, dynamic>? _selectedVoucher;
   bool _useVoucher = false;
 
   final List<Map<String, dynamic>> _paymentMethods = [
-    {'name': 'Dompet Digital RC', 'icon': Icons.account_balance_wallet_outlined},
-    {'name': 'COD (Bayar di Tempat)', 'icon': Icons.money},
+    {'name': 'Dompet Digital', 'icon': Icons.account_balance_wallet_outlined},
+    {'name': 'COD', 'icon': Icons.money_outlined},
   ];
 
   PaymentMethod get _selectedPaymentMethod =>
@@ -55,30 +55,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   CourierOption? get _selectedCourier =>
       _selectedCourierIndex != null && _shippingResult != null
-          ? _shippingResult!.options[_selectedCourierIndex!]
-          : null;
+      ? _shippingResult!.options[_selectedCourierIndex!]
+      : null;
 
-  double get _shippingCost => _selectedCourier?.cost ?? 0;
-  double get _voucherValue => _useVoucher ? (_voucherDiscount ?? 0) : 0;
-  double get _grandTotal => _cart.subtotal + _shippingCost - _voucherValue - _walletDiscount;
+  double get _shippingCost {
+    if (_cart.subtotal >= 500000) return 0;
+    return _selectedCourier?.cost ?? 0;
+  }
+
+  double get _voucherValue {
+    if (!_useVoucher || _selectedVoucher == null) return 0;
+    final percent = (_selectedVoucher!['discountPercent'] as num).toDouble();
+    return (_cart.subtotal * percent / 100).clamp(0, double.infinity);
+  }
+
+  double get _grandTotal =>
+      _cart.subtotal + _shippingCost - _voucherValue - _walletDiscount;
+
   bool get _canUseVoucher =>
       _selectedPaymentMethod == PaymentMethod.wallet &&
-      _voucherDiscount != null &&
-      _voucherDiscount! > 0;
+      _availableVouchers.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _loadShipping();
-    _voucherDiscount = HiveDb.instance.getVoucher();
+    _availableVouchers = HiveDb.instance.getActiveVouchers();
   }
 
+  // ============================================================
+  // SHIPPING
+  // ============================================================
   Future<void> _loadShipping() async {
+    final city = HiveDb.instance.getUserCity();
     final address = HiveDb.instance.getUserAddress();
-    if (address.isEmpty) return;
+    if (address.isEmpty && city.isEmpty) return;
+
     setState(() => _shippingLoading = true);
-    final totalWeight = _cart.items.fold<double>(0, (sum, item) => sum + item.totalWeight);
-    final result = ShippingCalculator.calculate(address, totalWeight);
+    final totalWeight = _cart.items.fold<double>(
+      0,
+      (sum, item) => sum + item.totalWeight,
+    );
+
+    final result = city.isNotEmpty
+        ? ShippingCalculator.calculateFromCity(city, totalWeight)
+        : ShippingCalculator.calculate(address, totalWeight);
+
     if (!mounted) return;
     setState(() {
       _shippingResult = result;
@@ -87,72 +109,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
+  // ============================================================
+  // ORDER PROCESSING
+  // ============================================================
   Future<void> _processOrder() async {
     if (_selectedCourier == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Pilih kurir pengiriman'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showToast('Pilih kurir pengiriman terlebih dahulu');
       return;
     }
 
-    if (_selectedPaymentMethod == PaymentMethod.wallet && _walletBalance < _grandTotal) {
-      final result = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusXL),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.account_balance_wallet_outlined,
-                  size: 48, color: AppColors.error),
-              const SizedBox(height: AppConstants.spacingL),
-              const Text('Saldo Tidak Mencukupi', style: AppTextStyles.heading4),
-              const SizedBox(height: AppConstants.spacingS),
-              Text(
-                'Saldo dompet digital Anda sebesar Rp ${_walletBalance.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}\n'
-                'Top up terlebih dahulu untuk melanjutkan.',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.softGrey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppConstants.spacingL),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlack,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                    ),
-                  ),
-                  child: const Text('Top Up Sekarang'),
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacingS),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Ganti Metode Bayar'),
-              ),
-            ],
-          ),
-        ),
-      );
-
+    if (_selectedPaymentMethod == PaymentMethod.wallet &&
+        _walletBalance < _grandTotal) {
+      final result = await _showInsufficientBalanceDialog();
       if (result == true) {
         final topUpResult = await Navigator.push<bool>(
           context,
           MaterialPageRoute(builder: (_) => const TopUpScreen()),
         );
-        if (topUpResult == true) {
-          setState(() {});
-        }
+        if (topUpResult == true) setState(() {});
       }
       return;
     }
@@ -174,12 +148,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         voucherDiscount: _voucherValue,
       );
 
-      if (_voucherValue > 0) {
-        await HiveDb.instance.setVoucher(0);
-      }
-
       if (_selectedPaymentMethod == PaymentMethod.wallet) {
         await HiveDb.instance.deductWallet(_grandTotal);
+        await _orderRepo.confirmPayment(orderId);
         _cart.clearCart();
         setState(() => _isProcessing = false);
         _showOrderSuccessDialog();
@@ -193,16 +164,87 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } catch (e) {
       setState(() => _isProcessing = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memproses pesanan: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showToast('Gagal memproses pesanan: $e', isError: true);
     }
+  }
+
+  // ============================================================
+  // DIALOGS & TOASTS
+  // ============================================================
+  void _showToast(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.pitchBlack,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<bool?> _showInsufficientBalanceDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 30,
+                color: AppColors.error,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Saldo Tidak Mencukupi',
+              style: AppTextStyles.heading4,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Saldo dompet digital Anda sebesar\n'
+              'Rp ${_formatRupiah(_walletBalance)}\n'
+              'Top up terlebih dahulu untuk melanjutkan.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.pitchBlack,
+                  foregroundColor: AppColors.pureWhite,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Top Up Sekarang'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Ganti Metode Bayar',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showQrisPayment(String orderId) {
@@ -210,40 +252,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusXL),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 200,
-              height: 200,
+              width: 180,
+              height: 180,
               decoration: BoxDecoration(
-                color: AppColors.primaryWhite,
-                borderRadius: BorderRadius.circular(AppConstants.radiusL),
+                color: AppColors.pureWhite,
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderGrey),
               ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.qr_code, size: 140, color: AppColors.pitchBlack),
-                  ],
+              child: const Center(
+                child: Icon(
+                  Icons.qr_code_scanner,
+                  size: 120,
+                  color: AppColors.pitchBlack,
                 ),
               ),
             ),
-            const SizedBox(height: AppConstants.spacingM),
-            Text('Scan QRIS', style: AppTextStyles.heading3),
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 16),
+            const Text(
+              'Scan QRIS',
+              style: AppTextStyles.heading4,
+            ),
+            const SizedBox(height: 8),
             Text(
               'Scan QR code di atas\nuntuk melakukan pembayaran',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.softGrey,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppConstants.spacingL),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -256,15 +296,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.pitchBlack,
                   foregroundColor: AppColors.pureWhite,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: const Text('Sudah Bayar'),
               ),
             ),
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -273,9 +313,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               },
               child: Text(
                 'Bayar Nanti',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.softGrey,
-                ),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               ),
             ),
           ],
@@ -289,52 +327,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusXL),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
+                color: Colors.green.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.check_circle,
-                color: AppColors.success,
-                size: 48,
+                color: Colors.green,
+                size: 30,
               ),
             ),
-            const SizedBox(height: AppConstants.spacingL),
-            Text('Pesanan Berhasil!', style: AppTextStyles.heading3),
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 16),
+            const Text(
+              'Pesanan Berhasil!',
+              style: AppTextStyles.heading4,
+            ),
+            const SizedBox(height: 8),
             Text(
               'Terima kasih telah berbelanja\ndi Republik Casual',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.softGrey,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppConstants.spacingM),
+            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
                 children: [
-                  Text('Status Pesanan', style: AppTextStyles.caption),
+                  Text(
+                    'Status Pesanan',
+                    style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                  ),
                   Text(
                     _selectedPaymentMethod == PaymentMethod.wallet
                         ? 'Pembayaran Berhasil'
-                        : _selectedPaymentMethod == PaymentMethod.qris
-                            ? 'Menunggu Konfirmasi Admin'
-                            : 'Sedang Diproses',
-                    style: AppTextStyles.labelLarge,
+                        : 'Menunggu Konfirmasi',
+                    style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -352,9 +390,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.pitchBlack,
                 foregroundColor: AppColors.pureWhite,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
               child: const Text('Lihat Pesanan'),
@@ -367,9 +405,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             },
             child: Text(
               'Kembali ke Beranda',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.softGrey,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
             ),
           ),
         ],
@@ -377,31 +413,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  String _formatRupiah(double value) {
+    return value
+        .toStringAsFixed(0)
+        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: AppColors.offWhite,
       appBar: _buildAppBar(),
       body: Column(
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildDeliveryAddress(),
-                  const SizedBox(height: AppConstants.spacingM),
+                  const SizedBox(height: 12),
                   _buildCourierSection(),
-                  const SizedBox(height: AppConstants.spacingM),
+                  const SizedBox(height: 12),
                   _buildPaymentMethod(),
                   if (_selectedPaymentMethod == PaymentMethod.wallet) ...[
-                    const SizedBox(height: AppConstants.spacingM),
+                    const SizedBox(height: 12),
                     _buildWalletInfo(),
                   ],
-                  const SizedBox(height: AppConstants.spacingM),
-                  if (_voucherDiscount != null) _buildVoucherSection(),
-                  const SizedBox(height: AppConstants.spacingM),
+                  const SizedBox(height: 12),
+                  if (_availableVouchers.isNotEmpty) _buildVoucherSection(),
+                  const SizedBox(height: 12),
                   _buildOrderSummary(),
                   const SizedBox(height: 100),
                 ],
@@ -414,36 +459,55 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ============================================================
+  // APP BAR
+  // ============================================================
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: AppColors.primaryWhite,
+      backgroundColor: AppColors.pureWhite,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: AppColors.primaryBlack),
+        icon: const Icon(
+          Icons.arrow_back_ios_new,
+          color: AppColors.pitchBlack,
+          size: 18,
+        ),
         onPressed: widget.onBack,
       ),
-      title: const Text('Checkout', style: AppTextStyles.heading4),
+      title: Text(
+        'Checkout',
+        style: AppTextStyles.heading4.copyWith(fontWeight: FontWeight.w700),
+      ),
       centerTitle: true,
     );
   }
 
-  Widget _buildSectionCard({
-    required Widget child,
-    String? title,
-    bool showTitle = true,
-  }) {
+  // ============================================================
+  // SECTION CARD
+  // ============================================================
+  Widget _buildSectionCard({required Widget child, String? title}) {
     return Container(
-      padding: const EdgeInsets.all(AppConstants.spacingM),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.primaryWhite,
-        borderRadius: BorderRadius.circular(AppConstants.radiusL),
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.pitchBlack.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showTitle && title != null) ...[
-            Text(title, style: AppTextStyles.labelLarge),
-            const SizedBox(height: AppConstants.spacingM),
+          if (title != null) ...[
+            Text(
+              title,
+              style: AppTextStyles.labelLarge,
+            ),
+            const SizedBox(height: 10),
           ],
           child,
         ],
@@ -451,8 +515,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ============================================================
+  // DELIVERY ADDRESS
+  // ============================================================
   Widget _buildDeliveryAddress() {
     final address = HiveDb.instance.getUserAddress();
+    final city = HiveDb.instance.getUserCity();
+    final province = HiveDb.instance.getUserProvince();
     final phone = HiveDb.instance.getUserPhone();
     final session = HiveDb.instance.getUserSession();
     final name = session?['name'] as String? ?? 'Customer';
@@ -463,32 +532,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(AppConstants.radiusM),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.location_on_outlined,
-              color: AppColors.primaryBlack,
+              color: AppColors.pitchBlack,
+              size: 18,
             ),
           ),
-          const SizedBox(width: AppConstants.spacingM),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: AppTextStyles.labelLarge),
+                Text(
+                  name,
+                  style: AppTextStyles.labelLarge,
+                ),
                 if (phone.isNotEmpty) ...[
-                  const SizedBox(height: AppConstants.spacingXS),
-                  Text(phone, style: AppTextStyles.bodySmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    phone,
+                    style: AppTextStyles.caption,
+                  ),
                 ],
-                const SizedBox(height: AppConstants.spacingXS),
+                const SizedBox(height: 2),
                 Text(
                   address,
-                  style: AppTextStyles.bodyMedium,
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey),
                 ),
+                if (city.isNotEmpty || province.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '${city.isNotEmpty ? city : ''}${city.isNotEmpty && province.isNotEmpty ? ', ' : ''}${province.isNotEmpty ? province : ''}',
+                    style: AppTextStyles.caption,
+                  ),
+                ],
               ],
             ),
           ),
@@ -497,6 +580,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ============================================================
+  // COURIER SECTION
+  // ============================================================
   Widget _buildCourierSection() {
     return _buildSectionCard(
       title: 'Kurir Pengiriman',
@@ -506,147 +592,147 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
           : _shippingResult == null || _shippingResult!.options.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Alamat tidak dikenali.\nPastikan alamat mencakup nama kota.',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                'Alamat tidak dikenali.\nPastikan alamat mencakup nama kota.',
+                style: AppTextStyles.caption,
+              ),
+            )
+          : Column(
+              children: [
+                if (_shippingResult!.estimatedDistanceKm > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.route_outlined,
+                          size: 14,
+                          color: AppColors.softGrey,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Estimasi jarak: ~${_shippingResult!.estimatedDistanceKm} km',
+                          style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : Column(
-                  children: [
-                    if (_shippingResult!.estimatedDistanceKm > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            Icon(Icons.route_outlined, size: 16, color: AppColors.softGrey),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Estimasi jarak: ~${_shippingResult!.estimatedDistanceKm} km dari Depok',
-                              style: AppTextStyles.caption,
-                            ),
-                          ],
+                ..._shippingResult!.options.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final opt = entry.value;
+                  final isSelected = index == _selectedCourierIndex;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCourierIndex = index),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.pitchBlack.withValues(alpha: 0.05)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.pitchBlack
+                              : AppColors.borderGrey,
+                          width: isSelected ? 2 : 1,
                         ),
                       ),
-                    ..._shippingResult!.options.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final opt = entry.value;
-                      final isSelected = index == _selectedCourierIndex;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedCourierIndex = index),
-                        child: AnimatedContainer(
-                          duration: AppConstants.animationFast,
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primaryBlack.withValues(alpha: 0.05)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryBlack
-                                  : AppColors.borderGrey,
-                              width: isSelected ? 1.5 : 1,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${opt.name} • ${opt.service}',
+                                  style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600, color: isSelected ? AppColors.pitchBlack : AppColors.darkGrey),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Estimasi ${opt.etd}',
+                                  style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${opt.name} • ${opt.service}',
-                                      style: AppTextStyles.labelLarge.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Estimasi ${opt.etd}',
-                                      style: AppTextStyles.caption,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                CartRepository.formatPrice(opt.cost),
-                                style: AppTextStyles.priceText.copyWith(
-                                  color: AppColors.pitchBlack,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              if (isSelected) ...[
-                                const SizedBox(width: 8),
-                                const Icon(Icons.check_circle, size: 20, color: AppColors.pitchBlack),
-                              ],
-                            ],
+                          Text(
+                            CartRepository.formatPrice(opt.cost),
+                            style: AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700, color: isSelected ? AppColors.pitchBlack : AppColors.darkGrey),
                           ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+                          if (isSelected) ...[
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.check_circle,
+                              size: 18,
+                              color: AppColors.pitchBlack,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
     );
   }
 
+  // ============================================================
+  // PAYMENT METHOD
+  // ============================================================
   Widget _buildPaymentMethod() {
     return _buildSectionCard(
       title: 'Metode Pembayaran',
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        mainAxisSpacing: AppConstants.spacingS,
-        crossAxisSpacing: AppConstants.spacingS,
-        childAspectRatio: 2.5,
+      child: Row(
         children: List.generate(_paymentMethods.length, (index) {
           final method = _paymentMethods[index];
           final isSelected = index == _selectedPaymentIndex;
 
-          return GestureDetector(
-            onTap: () => setState(() {
-              _selectedPaymentIndex = index;
-              if (_selectedPaymentMethod == PaymentMethod.cod) {
-                _useVoucher = false;
-              }
-            }),
-            child: AnimatedContainer(
-              duration: AppConstants.animationFast,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primaryBlack.withValues(alpha: 0.05)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.primaryBlack
-                      : AppColors.borderGrey,
-                  width: isSelected ? 1.5 : 1,
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _selectedPaymentIndex = index;
+                if (_selectedPaymentMethod == PaymentMethod.cod) {
+                  _useVoucher = false;
+                }
+              }),
+              child: Container(
+                margin: EdgeInsets.only(
+                  right: index < _paymentMethods.length - 1 ? 8 : 0,
                 ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    method['icon'],
-                    size: 20,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.pitchBlack.withValues(alpha: 0.05)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
                     color: isSelected
-                        ? AppColors.primaryBlack
-                        : AppColors.softGrey,
+                        ? AppColors.pitchBlack
+                        : AppColors.borderGrey,
+                    width: isSelected ? 2 : 1,
                   ),
-                  const SizedBox(width: AppConstants.spacingS),
-                  Text(
-                    method['name'].toString().split(' ').first,
-                    style: AppTextStyles.labelMedium.copyWith(
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      method['icon'],
+                      size: 18,
                       color: isSelected
-                          ? AppColors.primaryBlack
-                          : AppColors.darkGrey,
+                          ? AppColors.pitchBlack
+                          : AppColors.softGrey,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      method['name'],
+                      style: AppTextStyles.labelMedium.copyWith(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? AppColors.pitchBlack : AppColors.darkGrey),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -655,7 +741,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ============================================================
+  // WALLET INFO
+  // ============================================================
   Widget _buildWalletInfo() {
+    final isInsufficient = _walletBalance < _grandTotal;
+
     return _buildSectionCard(
       title: 'Dompet Digital RC',
       child: Column(
@@ -664,28 +755,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: AppColors.lightGrey,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.account_balance_wallet_outlined),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: AppConstants.spacingM),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Saldo Tersedia', style: AppTextStyles.caption),
+                    Text(
+                      'Saldo Tersedia',
+                      style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      'Rp ${_walletBalance.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                      style: AppTextStyles.heading4,
+                      'Rp ${_formatRupiah(_walletBalance)}',
+                      style: AppTextStyles.priceText,
                     ),
                   ],
                 ),
               ),
-              if (_walletBalance < _grandTotal)
+              if (isInsufficient)
                 GestureDetector(
                   onTap: () async {
                     final result = await Navigator.push<bool>(
@@ -696,69 +793,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacingM,
-                      vertical: AppConstants.spacingS,
+                      horizontal: 12,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryBlack,
-                      borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                      color: AppColors.pitchBlack,
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       'Top Up',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.pureWhite,
-                      ),
+                      style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.pureWhite),
                     ),
                   ),
                 ),
             ],
           ),
           if (_walletDiscount > 0) ...[
-            const SizedBox(height: AppConstants.spacingM),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                color: Colors.green.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.discount_outlined,
-                      color: AppColors.success, size: 18),
-                  const SizedBox(width: AppConstants.spacingS),
+                  const Icon(
+                    Icons.discount_outlined,
+                    color: Colors.green,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Diskon dompet 2%: -${CartRepository.formatPrice(_walletDiscount)}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppTextStyles.labelMedium.copyWith(color: Colors.green, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
             ),
           ],
-          if (_walletBalance < _grandTotal) ...[
-            const SizedBox(height: AppConstants.spacingS),
+          if (isInsufficient) ...[
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.2),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: AppColors.error, size: 18),
-                  const SizedBox(width: AppConstants.spacingS),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Saldo tidak mencukupi. Top up terlebih dahulu.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTextStyles.labelMedium.copyWith(color: AppColors.error),
                     ),
                   ),
                 ],
@@ -770,101 +869,182 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ============================================================
+  // VOUCHER SECTION
+  // ============================================================
   Widget _buildVoucherSection() {
+    if (_availableVouchers.isEmpty) return const SizedBox.shrink();
+
     return _buildSectionCard(
       title: 'Voucher Diskon',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
+          ...List.generate(_availableVouchers.length, (index) {
+            final v = _availableVouchers[index];
+            final isSelected = _selectedVoucher?['id'] == v['id'];
+            final percent = (v['discountPercent'] as num).toDouble();
+            final discountValue = (_cart.subtotal * percent / 100).clamp(
+              0,
+              double.infinity,
+            );
+
+            return GestureDetector(
+              onTap: () {
+                if (_canUseVoucher) {
+                  setState(() {
+                    if (isSelected && _useVoucher) {
+                      _selectedVoucher = null;
+                      _useVoucher = false;
+                    } else {
+                      _selectedVoucher = v;
+                      _useVoucher = true;
+                    }
+                  });
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _useVoucher
-                      ? AppColors.primaryBlack.withValues(alpha: 0.1)
-                      : AppColors.lightGrey,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                  color: isSelected && _useVoucher
+                      ? AppColors.pitchBlack.withValues(alpha: 0.05)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected && _useVoucher
+                        ? AppColors.pitchBlack
+                        : AppColors.borderGrey,
+                    width: isSelected && _useVoucher ? 2 : 1,
+                  ),
                 ),
-                child: Icon(
-                  Icons.confirmation_num,
-                  color: _useVoucher ? AppColors.primaryBlack : AppColors.softGrey,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      'Diskon ${CartRepository.formatPrice(_voucherDiscount!)}',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _useVoucher ? AppColors.primaryBlack : AppColors.softGrey,
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.pitchBlack,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.confirmation_num,
+                        color: AppColors.pureWhite,
+                        size: 16,
                       ),
                     ),
-                    Text(
-                      _canUseVoucher ? 'Berlaku untuk Dompet Digital RC' : 'Tidak tersedia untuk COD',
-                      style: AppTextStyles.caption,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            v['name'] as String? ?? '',
+                            style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600, color: _canUseVoucher ? AppColors.pitchBlack : AppColors.softGrey),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Diskon ${percent.toStringAsFixed(0)}% (s.d. ${CartRepository.formatPrice(discountValue as double)})',
+                            style: AppTextStyles.bodyXSmall.copyWith(color: _canUseVoucher ? AppColors.darkGrey : AppColors.softGrey),
+                          ),
+                        ],
+                      ),
                     ),
+                    if (_canUseVoucher && isSelected && _useVoucher)
+                      const Icon(
+                        Icons.check_circle,
+                        size: 18,
+                        color: AppColors.pitchBlack,
+                      )
+                    else if (_canUseVoucher && !isSelected)
+                      Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderGrey),
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.lock_outline,
+                        color: AppColors.softGrey,
+                        size: 18,
+                      ),
                   ],
                 ),
               ),
-              if (_canUseVoucher)
-                Switch(
-                  value: _useVoucher,
-                  onChanged: (v) => setState(() => _useVoucher = v),
-                  activeThumbColor: AppColors.primaryBlack,
-                )
-              else
-                Icon(Icons.lock_outline, color: AppColors.softGrey, size: 20),
-            ],
-          ),
+            );
+          }),
+          if (_selectedVoucher != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  size: 12,
+                  color: AppColors.softGrey,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _canUseVoucher
+                      ? 'Voucher akan diterapkan saat pembayaran'
+                      : 'Tidak tersedia untuk COD',
+                  style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
+  // ============================================================
+  // ORDER SUMMARY
+  // ============================================================
   Widget _buildOrderSummary() {
     return _buildSectionCard(
-      showTitle: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Ringkasan Pesanan', style: AppTextStyles.labelLarge),
-          const SizedBox(height: AppConstants.spacingM),
+          const Text(
+            'Ringkasan Pesanan',
+            style: AppTextStyles.labelLarge,
+          ),
+          const SizedBox(height: 10),
           ..._cart.items.map(
             (item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppConstants.spacingS),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                    borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
-                      width: 50,
-                      height: 50,
+                      width: 44,
+                      height: 44,
                       child: ProductImage(
                         imageUrl: item.imageUrl,
-                        width: 50,
-                        height: 50,
-                        borderRadius: AppConstants.radiusS,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 8,
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppConstants.spacingM),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           item.name,
-                          style: AppTextStyles.bodyMedium,
+                          style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w500, color: AppColors.pitchBlack),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${item.selectedSize} • ${item.weight} gr • x${item.quantity}',
-                          style: AppTextStyles.caption,
+                          '${item.selectedSize} • x${item.quantity}',
+                          style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                         ),
                       ],
                     ),
@@ -877,36 +1057,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ),
-          const Divider(height: AppConstants.spacingL),
+          const Divider(height: 12),
           _buildSummaryRow(
             'Subtotal',
             CartRepository.formatPrice(_cart.subtotal),
           ),
-          const SizedBox(height: AppConstants.spacingXS),
+          const SizedBox(height: 4),
           _buildSummaryRow(
             'Pengiriman',
             _shippingCost == 0
                 ? 'GRATIS'
                 : CartRepository.formatPrice(_shippingCost),
-            valueColor: _shippingCost == 0 ? AppColors.success : null,
+            valueColor: _shippingCost == 0 ? Colors.green : null,
           ),
           if (_voucherValue > 0) ...[
-            const SizedBox(height: AppConstants.spacingXS),
+            const SizedBox(height: 4),
             _buildSummaryRow(
               'Diskon Voucher',
               '-${CartRepository.formatPrice(_voucherValue)}',
-              valueColor: AppColors.success,
+              valueColor: Colors.green,
             ),
           ],
           if (_walletDiscount > 0) ...[
-            const SizedBox(height: AppConstants.spacingXS),
+            const SizedBox(height: 4),
             _buildSummaryRow(
               'Diskon Dompet',
               '-${CartRepository.formatPrice(_walletDiscount)}',
-              valueColor: AppColors.success,
+              valueColor: Colors.green,
             ),
           ],
-          const Divider(height: AppConstants.spacingL),
+          const Divider(height: 12),
           _buildSummaryRow(
             'Total',
             CartRepository.formatPrice(_grandTotal),
@@ -928,26 +1108,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       children: [
         Text(
           label,
-          style: isBold ? AppTextStyles.heading4 : AppTextStyles.bodyMedium,
+          style: isBold ? AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700) : AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey),
         ),
         Text(
           value,
-          style: isBold
-              ? AppTextStyles.heading4
-              : AppTextStyles.priceTextSmall.copyWith(color: valueColor),
+          style: isBold ? AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.pitchBlack) : AppTextStyles.labelMedium.copyWith(color: valueColor ?? AppColors.darkGrey),
         ),
       ],
     );
   }
 
+  // ============================================================
+  // BOTTOM BAR
+  // ============================================================
   Widget _buildBottomBar() {
     return Container(
-      padding: const EdgeInsets.all(AppConstants.spacingM),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.primaryWhite,
+        color: AppColors.pureWhite,
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadowColor.withValues(alpha: 0.1),
+            color: AppColors.pitchBlack.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -960,66 +1141,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Total Pembayaran', style: AppTextStyles.caption),
+                Text(
+                  'Total Pembayaran',
+                  style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
+                ),
                 Text(
                   CartRepository.formatPrice(_grandTotal),
-                  style: AppTextStyles.heading4,
+                  style: AppTextStyles.heading4.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
-            const SizedBox(width: AppConstants.spacingM),
+            const SizedBox(width: 12),
             Expanded(
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: AppColors.buttonGradient,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryBlack.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: _isProcessing ? null : _processOrder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                    ),
+              child: ElevatedButton(
+                onPressed: _isProcessing ? null : _processOrder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.pitchBlack,
+                  foregroundColor: AppColors.pureWhite,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: _isProcessing
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryWhite,
-                          ),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _selectedPaymentMethod == PaymentMethod.wallet
-                                  ? 'Bayar Dompet'
-                                  : _selectedPaymentMethod == PaymentMethod.qris
-                                      ? 'Bayar QRIS'
-                                      : 'Buat Pesanan',
-                              style: AppTextStyles.buttonText,
-                            ),
-                            const SizedBox(width: AppConstants.spacingS),
-                            const Icon(
-                              Icons.arrow_forward,
-                              color: AppColors.primaryWhite,
-                              size: 20,
-                            ),
-                          ],
-                        ),
+                  elevation: 0,
                 ),
+                child: _isProcessing
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.pureWhite,
+                        ),
+                      )
+                    : Text(
+                        _selectedPaymentMethod == PaymentMethod.wallet
+                            ? 'Bayar dengan Dompet'
+                            : 'Buat Pesanan',
+                        style: AppTextStyles.buttonText,
+                      ),
               ),
             ),
           ],

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/product_image.dart';
 import '../../domain/models/product_model.dart';
 import '../../data/repositories/cart_repository.dart';
@@ -29,6 +28,18 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
     'Streetwear': ['T-Shirt', 'Jaket', 'Hoodie', 'Celana'],
   };
 
+  static const Map<String, IconData> _styleIcons = {
+    'Casual': Icons.checkroom_rounded,
+    'Formal': Icons.dry_cleaning_rounded,
+    'Sporty': Icons.sports_baseball_rounded,
+    'Streetwear': Icons.shopping_bag_rounded,
+  };
+
+  static const Map<String, IconData> _genderIcons = {
+    'Pria': Icons.man_rounded,
+    'Wanita': Icons.woman_rounded,
+  };
+
   String _sizeForWeight(double weight) {
     if (weight < 50) return 'S';
     if (weight < 60) return 'M';
@@ -39,13 +50,7 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
   void _recommend() {
     final weight = double.tryParse(_weightCtrl.text);
     if (_selectedGender == null || weight == null || _selectedStyle == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Lengkapi semua data terlebih dahulu'),
-          backgroundColor: AppColors.primaryBlack,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showToast('Lengkapi semua data terlebih dahulu');
       return;
     }
 
@@ -62,6 +67,18 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
     });
   }
 
+  void _showToast(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.pitchBlack,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   String _formatPrice(double price) => CartRepository.formatPrice(price);
 
   double get _totalPrice =>
@@ -69,13 +86,7 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
 
   void _addToCart(ProductModel product) {
     if (product.stock <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stok ${product.name} habis'),
-          backgroundColor: AppColors.primaryBlack,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showToast('Stok ${product.name} habis', isError: true);
       return;
     }
     final size = product.availableSizes.contains(_recommendedSize)
@@ -83,22 +94,9 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
         : product.availableSizes.first;
     try {
       CartRepository().addItem(product: product, selectedSize: size);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${product.name} ($size) ditambahkan ke keranjang'),
-          backgroundColor: AppColors.primaryBlack,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showToast('${product.name} ($size) ditambahkan ke keranjang');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showToast(e.toString(), isError: true);
     }
   }
 
@@ -114,13 +112,11 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
         added++;
       } catch (_) {}
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$added produk ditambahkan ke keranjang'),
-        backgroundColor: AppColors.primaryBlack,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (added > 0) {
+      _showToast('$added produk ditambahkan ke keranjang');
+    } else {
+      _showToast('Tidak ada produk yang bisa ditambahkan', isError: true);
+    }
   }
 
   @override
@@ -132,267 +128,164 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pureWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.pureWhite,
-        elevation: 0,
-        title: const Text(
-          'AI STYLIST',
-          style: AppTextStyles.heading4,
-        ),
-        centerTitle: true,
-      ),
+      backgroundColor: AppColors.offWhite,
+      appBar: _buildAppBar(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppConstants.spacingL),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.lightGrey,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.auto_awesome, color: AppColors.primaryBlack, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'STYLE RECOMMENDATION',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.primaryBlack,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            _sectionLabel('PILIH JENIS KELAMIN'),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _genderChip('Pria', Icons.male),
-                const SizedBox(width: 12),
-                _genderChip('Wanita', Icons.female),
-              ],
-            ),
+            _buildHeader(),
+            const SizedBox(height: 20),
+            _buildGenderSection(),
+            const SizedBox(height: 20),
+            _buildWeightSection(),
+            const SizedBox(height: 20),
+            _buildStyleSection(),
             const SizedBox(height: 24),
-
-            _sectionLabel('BERAT BADAN (KG)'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _weightCtrl,
-              keyboardType: TextInputType.number,
-              style: AppTextStyles.bodyLarge,
-              decoration: InputDecoration(
-                hintText: 'Contoh: 65',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.softGrey),
-                filled: true,
-                fillColor: AppColors.lightGrey,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            _sectionLabel('PILIH GAYA'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _styleCategories.keys.map((style) {
-                final selected = _selectedStyle == style;
-                return ChoiceChip(
-                  label: Text(
-                    style.toUpperCase(),
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: selected ? AppColors.pureWhite : AppColors.primaryBlack,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  selected: selected,
-                  selectedColor: AppColors.primaryBlack,
-                  backgroundColor: AppColors.lightGrey,
-                  side: BorderSide(
-                    color: selected ? AppColors.primaryBlack : AppColors.borderGrey,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  onSelected: (v) => setState(() => _selectedStyle = v ? style : null),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 28),
-
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _recommend,
-                icon: const Icon(Icons.auto_awesome, color: AppColors.pureWhite),
-                label: const Text(
-                  'REKOMENDASIKAN',
-                  style: AppTextStyles.buttonText,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlack,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                  ),
-                ),
-              ),
-            ),
-
+            _buildRecommendButton(),
             if (_showResults) ...[
-              const SizedBox(height: 32),
-              Divider(color: AppColors.borderGrey, height: 1),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlack,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'UKURAN: $_recommendedSize',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.pureWhite,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${_recommendations.length} produk',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
+              const SizedBox(height: 24),
+              _buildResultsHeader(),
+              const SizedBox(height: 12),
               if (_recommendations.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 40),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.search_off, color: AppColors.softGrey, size: 48),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Tidak ada rekomendasi untuk gaya ini',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.softGrey),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+                _buildEmptyState()
               else ...[
-                ..._recommendations.map((product) => _buildProductCard(product)),
-
-                const SizedBox(height: 16),
-
-                // Total price
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.spacingM),
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGrey,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Harga',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        _formatPrice(_totalPrice),
-                        style: AppTextStyles.priceText,
-                      ),
-                    ],
-                  ),
+                ..._recommendations.map(
+                  (product) => _buildProductCard(product),
                 ),
-
                 const SizedBox(height: 12),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: _addAllToCart,
-                    icon: const Icon(Icons.shopping_cart, color: AppColors.pureWhite),
-                    label: const Text(
-                      'MASUKKAN KE KERANJANG',
-                      style: AppTextStyles.buttonText,
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlack,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildTotalPrice(),
+                const SizedBox(height: 10),
+                _buildAddAllButton(),
               ],
             ],
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _sectionLabel(String label) {
-    return Text(
-      label,
-      style: AppTextStyles.labelMedium.copyWith(
-        color: AppColors.primaryBlack,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
-        fontSize: 11,
+  // ============================================================
+  // APP BAR (HEADER STYLE KAYAK KATEGORI)
+  // ============================================================
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.pureWhite,
+      elevation: 0,
+      title: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 24,
+            decoration: BoxDecoration(
+              gradient: AppColors.blackGradient,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+            const Text(
+              'AI Stylist',
+              style: AppTextStyles.heading3,
+            ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.pitchBlack,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.auto_awesome, color: AppColors.pureWhite, size: 12),
+                const SizedBox(width: 4),
+                  Text(
+                    'AI',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.pureWhite,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
+      centerTitle: false,
     );
   }
 
-  Widget _genderChip(String label, IconData icon) {
+  // ============================================================
+  // HEADER (GAUSA PAKE LAGI)
+  // ============================================================
+  Widget _buildHeader() {
+    return const SizedBox.shrink();
+  }
+
+  // ============================================================
+  // GENDER SECTION (TANPA GARIS)
+  // ============================================================
+  Widget _buildGenderSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Jenis Kelamin',
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.pitchBlack,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _genderChip('Pria'),
+            const SizedBox(width: 10),
+            _genderChip('Wanita'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _genderChip(String label) {
     final selected = _selectedGender == label;
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _selectedGender = label),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlack : AppColors.lightGrey,
-            borderRadius: BorderRadius.circular(AppConstants.radiusM),
+            color: selected ? AppColors.pitchBlack : AppColors.pureWhite,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? AppColors.primaryBlack : AppColors.borderGrey,
+              color: selected ? AppColors.pitchBlack : AppColors.borderGrey,
+              width: selected ? 2 : 1,
             ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppColors.pitchBlack.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: selected ? AppColors.pureWhite : AppColors.primaryBlack, size: 20),
+              Icon(
+                _genderIcons[label]!,
+                color: selected ? AppColors.pureWhite : AppColors.darkGrey,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: selected ? AppColors.pureWhite : AppColors.primaryBlack,
-                ),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.pureWhite : AppColors.darkGrey,
+              ),
               ),
             ],
           ),
@@ -401,38 +294,290 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
     );
   }
 
+  // ============================================================
+  // WEIGHT SECTION (TANPA GARIS)
+  // ============================================================
+  Widget _buildWeightSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Berat Badan (kg)',
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.pitchBlack,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.pureWhite,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.borderGrey),
+          ),
+          child: TextField(
+            controller: _weightCtrl,
+            keyboardType: TextInputType.number,
+            style: AppTextStyles.priceTextSmall,
+            decoration: InputDecoration(
+              hintText: 'Masukkan berat badan',
+              hintStyle: AppTextStyles.caption.copyWith(fontSize: 14),
+              prefixIcon: const Icon(
+                Icons.fitness_center_rounded,
+                size: 18,
+                color: AppColors.softGrey,
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // STYLE SECTION (TANPA GARIS)
+  // ============================================================
+  Widget _buildStyleSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pilih Gaya',
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.pitchBlack,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _styleCategories.keys.map((style) {
+            final selected = _selectedStyle == style;
+            return GestureDetector(
+              onTap: () => setState(() {
+                _selectedStyle = selected ? null : style;
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.pitchBlack : AppColors.pureWhite,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.pitchBlack
+                        : AppColors.borderGrey,
+                    width: selected ? 2 : 1,
+                  ),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.pitchBlack.withValues(alpha: 0.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _styleIcons[style]!,
+                      size: 16,
+                      color: selected
+                          ? AppColors.pureWhite
+                          : AppColors.darkGrey,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      style,
+                      style: AppTextStyles.caption.copyWith(
+                        color: selected
+                            ? AppColors.pureWhite
+                            : AppColors.darkGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // RECOMMEND BUTTON
+  // ============================================================
+  Widget _buildRecommendButton() {
+    final isReady =
+        _selectedGender != null &&
+        _weightCtrl.text.isNotEmpty &&
+        _selectedStyle != null;
+
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: isReady ? _recommend : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isReady ? AppColors.pitchBlack : AppColors.lightGrey,
+          foregroundColor: AppColors.pureWhite,
+          disabledBackgroundColor: AppColors.lightGrey,
+          disabledForegroundColor: AppColors.softGrey,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 0,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              isReady ? 'Rekomendasikan' : 'Lengkapi Data',
+              style: AppTextStyles.priceTextSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // RESULTS HEADER
+  // ============================================================
+  Widget _buildResultsHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderGrey),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.pitchBlack,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'UKURAN: $_recommendedSize',
+              style: AppTextStyles.labelSmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.pureWhite,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '${_recommendations.length} produk',
+            style: AppTextStyles.caption,
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              _selectedStyle ?? '',
+              style: AppTextStyles.labelSmall.copyWith(
+                fontSize: 9,
+                color: AppColors.darkGrey,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.search_off_rounded, size: 48, color: AppColors.softGrey),
+            const SizedBox(height: 12),
+            Text(
+              'Tidak ada rekomendasi untuk gaya ini',
+              style: AppTextStyles.priceTextSmall.copyWith(
+                color: AppColors.softGrey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Coba pilih gaya lain',
+              style: AppTextStyles.caption,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // PRODUCT CARD
+  // ============================================================
   Widget _buildProductCard(ProductModel product) {
     final size = product.availableSizes.contains(_recommendedSize)
         ? _recommendedSize
         : product.availableSizes.first;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppConstants.radiusM),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.borderGrey),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.pitchBlack.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Row(
           children: [
-            ProductImage(
-              imageUrl: product.imageUrl,
-              width: 80,
-              height: 80,
-              borderRadius: AppConstants.radiusS,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ProductImage(
+                imageUrl: product.imageUrl,
+                width: 72,
+                height: 72,
+                borderRadius: 8,
+              ),
             ),
-            const SizedBox(width: 14),
-
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     product.name,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.pitchBlack,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -446,26 +591,30 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlack,
+                          color: AppColors.pitchBlack,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           size,
-                          style: AppTextStyles.caption.copyWith(
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontSize: 9,
                             color: AppColors.pureWhite,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       if (product.stock <= 0)
                         Text(
                           'HABIS',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.error,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
+                            color: AppColors.error,
                           ),
                         )
                       else
@@ -478,27 +627,94 @@ class _AiStylistScreenState extends State<AiStylistScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-
-            SizedBox(
-              width: 40,
-              height: 40,
-              child: IconButton(
-                onPressed: product.stock > 0 ? () => _addToCart(product) : null,
-                icon: Icon(
-                  Icons.add_shopping_cart,
-                  color: product.stock > 0 ? AppColors.primaryBlack : AppColors.softGrey,
-                  size: 20,
+            GestureDetector(
+              onTap: product.stock > 0 ? () => _addToCart(product) : null,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: product.stock > 0
+                      ? AppColors.pitchBlack
+                      : AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: product.stock > 0
+                      ? [
+                          BoxShadow(
+                            color: AppColors.pitchBlack.withValues(alpha: 0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
                 ),
-                style: IconButton.styleFrom(
-                  backgroundColor: product.stock > 0
-                      ? AppColors.lightGrey
-                      : AppColors.borderGrey,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusS),
-                  ),
+                child: Icon(
+                  Icons.add_shopping_cart_rounded,
+                  color: product.stock > 0
+                      ? AppColors.pureWhite
+                      : AppColors.softGrey,
+                  size: 18,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // TOTAL PRICE
+  // ============================================================
+  Widget _buildTotalPrice() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Total Harga',
+            style: AppTextStyles.labelMedium.copyWith(
+              color: AppColors.pitchBlack,
+            ),
+          ),
+          Text(
+            _formatPrice(_totalPrice),
+            style: AppTextStyles.priceText,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // ADD ALL BUTTON
+  // ============================================================
+  Widget _buildAddAllButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: ElevatedButton(
+        onPressed: _recommendations.isEmpty ? null : _addAllToCart,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.pitchBlack,
+          foregroundColor: AppColors.pureWhite,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 0,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shopping_bag_outlined, size: 18),
+            const SizedBox(width: 8),
+            const Text(
+              'Masukkan Semua ke Keranjang',
+              style: AppTextStyles.labelMedium,
             ),
           ],
         ),

@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/constants/app_constants.dart';
-import '../../data/dummy/home_dummy_data.dart';
 import '../../domain/models/product_model.dart';
+import '../../domain/models/category_model.dart';
 import '../widgets/product_card.dart';
 
-/// Search Screen with search bar and results
 class SearchScreen extends StatefulWidget {
   final Function(ProductModel) onProductTap;
 
-  const SearchScreen({
-    super.key,
-    required this.onProductTap,
-  });
+  const SearchScreen({super.key, required this.onProductTap});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -27,15 +23,18 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _recentSearches = [];
   bool _isSearching = false;
   String _selectedFilter = 'All';
-
-  final List<String> _filters = ['All', 'T-Shirt', 'Shirt', 'Pants', 'Jacket', 'Accessories'];
+  List<String> _filters = ['All'];
+  List<CategoryModel> _categories = [];
 
   @override
   void initState() {
     super.initState();
-    _allProducts = HomeDummyData.products;
+    final db = HiveDb.instance;
+    _categories = db.getCategories();
+    _filters = ['All', ..._categories.map((c) => c.name)];
+    _allProducts = db.getActiveProducts();
     _searchResults = _allProducts;
-    // Auto focus search field
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
@@ -58,16 +57,15 @@ class _SearchScreenState extends State<SearchScreen> {
   void _filterProducts(String query) {
     List<ProductModel> filtered = _allProducts;
 
-    // Apply category filter
     if (_selectedFilter != 'All') {
       filtered = filtered.where((p) => p.category == _selectedFilter).toList();
     }
 
-    // Apply search query
     if (query.isNotEmpty) {
+      final q = query.toLowerCase();
       filtered = filtered.where((p) {
-        return p.name.toLowerCase().contains(query.toLowerCase()) ||
-            p.category.toLowerCase().contains(query.toLowerCase());
+        return p.name.toLowerCase().contains(q) ||
+            p.category.toLowerCase().contains(q);
       }).toList();
     }
 
@@ -82,14 +80,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _addToRecentSearch(String query) {
-    if (query.isNotEmpty && !_recentSearches.contains(query)) {
-      setState(() {
-        _recentSearches.insert(0, query);
-        if (_recentSearches.length > 5) {
-          _recentSearches.removeLast();
-        }
-      });
-    }
+    if (query.isEmpty) return;
+    setState(() {
+      _recentSearches.remove(query);
+      _recentSearches.insert(0, query);
+      if (_recentSearches.length > 5) {
+        _recentSearches.removeLast();
+      }
+    });
   }
 
   void _onSearchSubmit(String query) {
@@ -104,19 +102,24 @@ class _SearchScreenState extends State<SearchScreen> {
       _selectedFilter = 'All';
       _searchResults = _allProducts;
     });
+    _focusNode.requestFocus();
+  }
+
+  void _onPopularSearchTap(String query) {
+    _searchController.text = query;
+    _addToRecentSearch(query);
+    _onSearch(query);
+    _focusNode.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primaryWhite,
+      backgroundColor: AppColors.offWhite,
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          // Filter Chips
           _buildFilterChips(),
-
-          // Content
           Expanded(
             child: _isSearching
                 ? _buildSearchResults()
@@ -127,81 +130,116 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // ============================================================
+  // APP BAR
+  // ============================================================
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: AppColors.primaryWhite,
+      backgroundColor: AppColors.pureWhite,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: AppColors.primaryBlack),
+        icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+        color: AppColors.pitchBlack,
         onPressed: () => Navigator.pop(context),
       ),
       title: _buildSearchField(),
+      toolbarHeight: 60,
     );
   }
 
   Widget _buildSearchField() {
     return Container(
-      height: 48,
+      height: 44,
       decoration: BoxDecoration(
         color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(AppConstants.radiusM),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
         controller: _searchController,
         focusNode: _focusNode,
         onChanged: _onSearch,
         onSubmitted: _onSearchSubmit,
-        style: AppTextStyles.bodyMedium,
+        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.pitchBlack),
         decoration: InputDecoration(
           hintText: 'Cari produk...',
           hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.softGrey),
-          prefixIcon: const Icon(Icons.search, color: AppColors.softGrey),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: AppColors.softGrey,
+            size: 20,
+          ),
           suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, color: AppColors.softGrey),
-                  onPressed: _clearSearch,
+              ? GestureDetector(
+                  onTap: _clearSearch,
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppColors.softGrey,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: AppColors.pureWhite,
+                      size: 12,
+                    ),
+                  ),
                 )
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spacingM,
-            vertical: AppConstants.spacingM,
+            horizontal: 12,
+            vertical: 10,
           ),
         ),
       ),
     );
   }
 
+  // ============================================================
+  // FILTER CHIPS
+  // ============================================================
   Widget _buildFilterChips() {
     return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingS),
+      height: 48,
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppConstants.spacingS),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final filter = _filters[index];
           final isSelected = filter == _selectedFilter;
 
           return GestureDetector(
             onTap: () => _onFilterSelected(filter),
-            child: AnimatedContainer(
-              duration: AppConstants.animationFast,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacingM,
-                vertical: AppConstants.spacingS,
-              ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primaryBlack : AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                color: isSelected ? AppColors.pitchBlack : AppColors.pureWhite,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.pitchBlack
+                      : AppColors.borderGrey,
+                  width: 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.pitchBlack.withValues(alpha: 0.1),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
               child: Center(
                 child: Text(
                   filter,
                   style: AppTextStyles.labelMedium.copyWith(
-                    color: isSelected ? AppColors.primaryWhite : AppColors.darkGrey,
+                    color: isSelected ? AppColors.pureWhite : AppColors.darkGrey,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
@@ -213,53 +251,35 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // ============================================================
+  // SEARCH SUGGESTIONS
+  // ============================================================
   Widget _buildSearchSuggestions() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacingM),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Recent Searches
           if (_recentSearches.isNotEmpty) ...[
             _buildSectionHeader(
               title: 'Pencarian Terakhir',
               actionText: 'Hapus',
               onAction: () => setState(() => _recentSearches.clear()),
             ),
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 8),
             Wrap(
-              spacing: AppConstants.spacingS,
-              runSpacing: AppConstants.spacingS,
+              spacing: 8,
+              runSpacing: 8,
               children: _recentSearches.map((search) {
-                return _buildRecentSearchChip(search);
+                return _buildChip(
+                  text: search,
+                  icon: Icons.history_rounded,
+                  isRecent: true,
+                );
               }).toList(),
             ),
-            const SizedBox(height: AppConstants.spacingXL),
+            const SizedBox(height: 24),
           ],
-
-          // Popular Searches
-          _buildSectionHeader(title: 'Pencarian Populer'),
-          const SizedBox(height: AppConstants.spacingS),
-          Wrap(
-            spacing: AppConstants.spacingS,
-            runSpacing: AppConstants.spacingS,
-            children: [
-              'T-Shirt Basic',
-              'Jeans Slim Fit',
-              'Jaket Kulit',
-              'Polo Shirt',
-              'Sneakers',
-              'Hoodie',
-            ].map((search) {
-              return _buildPopularSearchChip(search);
-            }).toList(),
-          ),
-          const SizedBox(height: AppConstants.spacingXL),
-
-          // Popular Categories
-          _buildSectionHeader(title: 'Kategori Populer'),
-          const SizedBox(height: AppConstants.spacingM),
-          _buildPopularCategories(),
         ],
       ),
     );
@@ -273,73 +293,57 @@ class _SearchScreenState extends State<SearchScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: AppTextStyles.labelLarge),
+        Row(
+          children: [
+            Container(
+              width: 3,
+              height: 14,
+              decoration: BoxDecoration(
+                gradient: AppColors.blackGradient,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: AppTextStyles.labelLarge,
+            ),
+          ],
+        ),
         if (actionText != null)
           GestureDetector(
             onTap: onAction,
             child: Text(
               actionText,
-              style: AppTextStyles.labelMedium.copyWith(
-                decoration: TextDecoration.underline,
-              ),
+              style: AppTextStyles.labelMedium,
             ),
           ),
       ],
     );
   }
 
-  Widget _buildRecentSearchChip(String text) {
+  Widget _buildChip({
+    required String text,
+    required IconData icon,
+    required bool isRecent,
+  }) {
     return GestureDetector(
-      onTap: () {
-        _searchController.text = text;
-        _onSearch(text);
-      },
+      onTap: () => _onPopularSearchTap(text),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacingM,
-          vertical: AppConstants.spacingS,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.lightGrey,
-          borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+          color: isRecent ? AppColors.lightGrey : AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: isRecent ? null : Border.all(color: AppColors.borderGrey),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.history, size: 16, color: AppColors.softGrey),
-            const SizedBox(width: 6),
-            Text(text, style: AppTextStyles.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPopularSearchChip(String text) {
-    return GestureDetector(
-      onTap: () {
-        _searchController.text = text;
-        _onSearch(text);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacingM,
-          vertical: AppConstants.spacingS,
-        ),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.borderGrey),
-          borderRadius: BorderRadius.circular(AppConstants.radiusRound),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.trending_up, size: 16, color: AppColors.softGrey),
+            Icon(icon, size: 14, color: AppColors.softGrey),
             const SizedBox(width: 6),
             Text(
               text,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.darkGrey,
-              ),
+              style: AppTextStyles.caption.copyWith(color: AppColors.darkGrey),
             ),
           ],
         ),
@@ -347,70 +351,9 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildPopularCategories() {
-    final categories = [
-      {'icon': Icons.checkroom, 'name': 'T-Shirt', 'count': 24},
-      {'icon': Icons.dry_cleaning, 'name': 'Shirt', 'count': 18},
-      {'icon': Icons.accessibility, 'name': 'Pants', 'count': 15},
-      {'icon': Icons.layers, 'name': 'Jacket', 'count': 12},
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.5,
-        crossAxisSpacing: AppConstants.spacingM,
-        mainAxisSpacing: AppConstants.spacingM,
-      ),
-      itemCount: categories.length,
-      itemBuilder: (context, index) {
-        final category = categories[index];
-        return GestureDetector(
-          onTap: () {
-            _searchController.text = category['name'] as String;
-            _onFilterSelected(category['name'] as String);
-            _onSearch(category['name'] as String);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(AppConstants.spacingM),
-            decoration: BoxDecoration(
-              color: AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(AppConstants.radiusL),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  category['icon'] as IconData,
-                  color: AppColors.primaryBlack,
-                  size: 24,
-                ),
-                const SizedBox(width: AppConstants.spacingM),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        category['name'] as String,
-                        style: AppTextStyles.labelLarge,
-                      ),
-                      Text(
-                        '${category['count']} items',
-                        style: AppTextStyles.caption,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
+  // ============================================================
+  // SEARCH RESULTS
+  // ============================================================
   Widget _buildSearchResults() {
     if (_searchResults.isEmpty) {
       return _buildEmptyState();
@@ -420,20 +363,20 @@ class _SearchScreenState extends State<SearchScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.all(AppConstants.spacingM),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text(
             'Ditemukan ${_searchResults.length} produk',
-            style: AppTextStyles.bodySmall,
+            style: AppTextStyles.caption,
           ),
         ),
         Expanded(
           child: GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: AppConstants.gridSpacing,
-              mainAxisSpacing: AppConstants.gridSpacing,
+              childAspectRatio: 0.6,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
             ),
             itemCount: _searchResults.length,
             itemBuilder: (context, index) {
@@ -452,34 +395,54 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacingXXL),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.search_off,
-              size: 80,
-              color: AppColors.lightGrey,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.lightGrey,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(
+                Icons.search_off_rounded,
+                size: 40,
+                color: AppColors.softGrey,
+              ),
             ),
-            const SizedBox(height: AppConstants.spacingL),
+            const SizedBox(height: 16),
             Text(
               'Produk tidak ditemukan',
-              style: AppTextStyles.heading4.copyWith(
-                color: AppColors.softGrey,
-              ),
+              style: AppTextStyles.heading4,
             ),
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 8),
             Text(
-              'Coba kata kunci lain atau\nperiksa ejaan pencarian Anda',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.softGrey,
-              ),
+              'Coba kata kunci lain atau periksa ejaan',
+              style: AppTextStyles.bodySmall,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppConstants.spacingL),
-            TextButton(
-              onPressed: _clearSearch,
-              child: const Text('Hapus Filter'),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _clearSearch,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.pitchBlack,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Hapus Filter',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.pureWhite,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

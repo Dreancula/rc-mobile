@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/app_logo.dart';
+import '../../../../core/localization/translations.dart';
+import '../../../../core/localization/language_provider.dart';
+import '../../../home/presentation/screens/about_us_screen.dart';
+import '../../../../data/indonesia_regions.dart';
+import '../../../../core/services/location_helper.dart';
+import 'otp_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   final VoidCallback onRegisterSuccess;
@@ -30,6 +37,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   bool _acceptTerms = false;
+  String _selectedProvince = '';
+  String _selectedCity = '';
+  List<String> _cities = [];
+  bool _locating = false;
 
   @override
   void dispose() {
@@ -40,6 +51,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phoneController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  Future<void> _detectLocation() async {
+    setState(() => _locating = true);
+    final result = await LocationHelper.detectLocation();
+    if (!mounted) return;
+    setState(() => _locating = false);
+
+    if (result.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error!), backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    // Match province
+    String? matchedProvince = result.province;
+    if (matchedProvince != null && !IndonesiaRegions.provinces.contains(matchedProvince)) {
+      matchedProvince = null;
+    }
+
+    // Match city
+    String? matchedCity = result.city;
+    List<String> citiesInProvince = matchedProvince != null
+        ? List<String>.from(IndonesiaRegions.citiesByProvince[matchedProvince] ?? [])
+        : <String>[];
+
+    if (matchedCity != null) {
+      final found = IndonesiaRegions.findMatchingCity(matchedCity, citiesInProvince);
+      if (found != null) {
+        matchedCity = found;
+      } else if (matchedProvince != null) {
+        // City not in current province list — try searching all provinces
+        final (prov, city) = IndonesiaRegions.findProvinceAndCity(matchedCity);
+        if (prov != null && city != null) {
+          matchedProvince = prov;
+          matchedCity = city;
+          citiesInProvince = List<String>.from(IndonesiaRegions.citiesByProvince[matchedProvince]!);
+        } else {
+          matchedCity = null;
+        }
+      } else {
+        // No province detected — search all provinces
+        final (prov, city) = IndonesiaRegions.findProvinceAndCity(matchedCity);
+        if (prov != null && city != null) {
+          matchedProvince = prov;
+          matchedCity = city;
+          citiesInProvince = List<String>.from(IndonesiaRegions.citiesByProvince[matchedProvince]!);
+        } else {
+          matchedCity = null;
+        }
+      }
+    }
+
+    setState(() {
+      _selectedProvince = matchedProvince ?? '';
+      _cities = citiesInProvince;
+      _selectedCity = matchedCity ?? '';
+    });
   }
 
   Future<void> _handleRegister() async {
@@ -61,8 +131,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      address: _addressController.text.trim(),
+      address: _buildFullAddress(),
       phone: _phoneController.text.trim(),
+      province: _selectedProvince,
+      city: _selectedCity,
     );
 
     setState(() => _isLoading = false);
@@ -70,10 +142,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (result['success'] == true) {
-      await HiveDb.instance.saveUserSession(
-        result['user'] as Map<String, dynamic>,
-      );
-      if (mounted) widget.onRegisterSuccess();
+      final user = result['user'] as Map<String, dynamic>;
+      await HiveDb.instance.saveUserSession(user);
+      if (!mounted) return;
+
+      final phone = _phoneController.text.trim();
+      if (phone.isNotEmpty) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(
+              email: user['email'] as String,
+              phone: phone,
+              onVerified: () {
+                Navigator.pop(context);
+                if (mounted) widget.onRegisterSuccess();
+              },
+            ),
+          ),
+        );
+      } else {
+        if (mounted) widget.onRegisterSuccess();
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -105,6 +195,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _buildRegisterButton(),
               const SizedBox(height: 24),
               _buildLoginLink(),
+              const SizedBox(height: 16),
+              _buildAboutLink(),
               const SizedBox(height: 40),
             ],
           ),
@@ -114,14 +206,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildHeader() {
+    final locale = context.watch<LanguageProvider>().locale;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const AppLogo(size: 56),
         const SizedBox(height: 32),
-        const Text(
-          'Create Account',
-          style: TextStyle(
+        Text(
+          Translations.tr('create_account', locale),
+          style: const TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.w700,
             color: AppColors.pitchBlack,
@@ -131,7 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Sign up to start your shopping journey',
+          Translations.tr('sign_up_journey', locale),
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,
@@ -168,12 +261,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // Name Field
             _buildInputField(
               controller: _nameController,
-              hintText: 'Full name',
+              hintText: Translations.tr('full_name', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.person_outline_rounded,
               keyboardType: TextInputType.name,
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Name is required';
+                  return Translations.tr('name_required', l);
                 }
                 return null;
               },
@@ -183,15 +277,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // Email Field
             _buildInputField(
               controller: _emailController,
-              hintText: 'Email address',
+              hintText: Translations.tr('email', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.alternate_email_outlined,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Email is required';
+                  return Translations.tr('email_required', l);
                 }
                 if (!value.contains('@')) {
-                  return 'Enter a valid email';
+                  return Translations.tr('valid_email', l);
                 }
                 return null;
               },
@@ -201,7 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // Password Field
             _buildInputField(
               controller: _passwordController,
-              hintText: 'Password',
+              hintText: Translations.tr('password', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.lock_outline_rounded,
               obscureText: _obscurePassword,
               suffixIcon: IconButton(
@@ -217,11 +312,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Password is required';
+                  return Translations.tr('password_required', l);
                 }
                 if (value.length < 6) {
-                  return 'Min. 6 characters';
+                  return Translations.tr('password_min', l);
                 }
                 return null;
               },
@@ -231,7 +327,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // Confirm Password Field
             _buildInputField(
               controller: _confirmPasswordController,
-              hintText: 'Confirm password',
+              hintText: Translations.tr('confirm_password', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.lock_outline_rounded,
               obscureText: _obscureConfirmPassword,
               suffixIcon: IconButton(
@@ -247,44 +343,93 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Confirm your password';
+                  return Translations.tr('confirm_password_required', l);
                 }
                 if (value != _passwordController.text) {
-                  return 'Passwords do not match';
+                  return Translations.tr('password_no_match', l);
                 }
                 return null;
               },
             ),
             const SizedBox(height: 24),
-            _buildSectionLabel('Shipping Address'),
+            _buildSectionLabel(Translations.tr('shipping_address', context.watch<LanguageProvider>().locale)),
             const SizedBox(height: 12),
 
             // Phone Field
             _buildInputField(
               controller: _phoneController,
-              hintText: 'Phone number',
+              hintText: Translations.tr('phone', context.watch<LanguageProvider>().locale),
               prefixIcon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Phone number is required for shipping';
+                  return Translations.tr('phone_required', l);
                 }
                 return null;
               },
             ),
             const SizedBox(height: 16),
 
-            // Address Field
+            // Location detect button
+            SizedBox(
+              width: double.infinity, height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _locating ? null : _detectLocation,
+                icon: _locating
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.my_location_rounded, size: 20),
+                label: Text(_locating ? 'Mendeteksi lokasi...' : 'Deteksi Lokasi Saya'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.pitchBlack,
+                  side: const BorderSide(color: AppColors.pitchBlack),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Province Dropdown
+            _buildDropdown(
+              value: _selectedProvince,
+              hint: 'Provinsi',
+              icon: Icons.map_outlined,
+              items: IndonesiaRegions.provinces,
+              onChanged: (v) {
+                setState(() {
+                  _selectedProvince = v;
+                  _selectedCity = '';
+                  _cities = IndonesiaRegions.citiesByProvince[v] ?? [];
+                });
+              },
+              validator: (v) => (v == null || v.isEmpty) ? 'Pilih provinsi' : null,
+            ),
+            const SizedBox(height: 16),
+
+            // City Dropdown
+            _buildDropdown(
+              value: _selectedCity,
+              hint: 'Kota/Kabupaten',
+              icon: Icons.location_city_outlined,
+              items: _cities,
+              onChanged: (v) => setState(() => _selectedCity = v),
+              validator: (v) => (v == null || v.isEmpty) ? 'Pilih kota' : null,
+            ),
+            const SizedBox(height: 16),
+
+            // Address Detail
             _buildInputField(
               controller: _addressController,
-              hintText: 'Full address (street, city, postal code)',
+              hintText: 'Detail alamat (jalan, gang, no. rumah)',
               prefixIcon: Icons.location_on_outlined,
               keyboardType: TextInputType.streetAddress,
-              maxLines: 3,
+              maxLines: 2,
               validator: (value) {
+                final l = context.read<LanguageProvider>().locale;
                 if (value == null || value.isEmpty) {
-                  return 'Address is required for shipping';
+                  return Translations.tr('address_required', l);
                 }
                 return null;
               },
@@ -378,7 +523,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _buildDropdown({
+    required String value,
+    required String hint,
+    required IconData icon,
+    required List<String> items,
+    required void Function(String) onChanged,
+    String? Function(String?)? validator,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value.isEmpty ? null : value,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(fontSize: 14, color: AppColors.softGrey),
+        prefixIcon: Icon(icon, color: AppColors.charcoal, size: 20),
+        filled: true,
+        fillColor: AppColors.lightGrey,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.pitchBlack, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+      ),
+      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item, style: const TextStyle(fontSize: 14)))).toList(),
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+      validator: validator ?? (v) => v == null || v.isEmpty ? hint : null,
+      dropdownColor: AppColors.pureWhite,
+    );
+  }
+
+  String _buildFullAddress() {
+    final parts = <String>[];
+    if (_addressController.text.trim().isNotEmpty) parts.add(_addressController.text.trim());
+    if (_selectedCity.isNotEmpty) parts.add(_selectedCity);
+    if (_selectedProvince.isNotEmpty) parts.add(_selectedProvince);
+    return parts.join(', ');
+  }
+
   Widget _buildTermsCheckbox() {
+    final locale = context.watch<LanguageProvider>().locale;
     return GestureDetector(
       onTap: () => setState(() => _acceptTerms = !_acceptTerms),
       child: Row(
@@ -407,14 +602,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Expanded(
             child: Text.rich(
               TextSpan(
-                text: 'I agree to the ',
+                text: Translations.tr('accept_terms', locale),
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.softGrey,
                 ),
                 children: [
                   TextSpan(
-                    text: 'Terms of Service',
+                    text: Translations.tr('terms_of_service', locale),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -422,14 +617,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   TextSpan(
-                    text: ' and ',
+                    text: Translations.tr('and', locale),
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.softGrey,
                     ),
                   ),
                   TextSpan(
-                    text: 'Privacy Policy',
+                    text: Translations.tr('privacy_policy', locale),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -480,9 +675,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               )
-            : const Text(
-                'Create Account',
-                style: TextStyle(
+            : Text(
+                Translations.tr('create_account', context.watch<LanguageProvider>().locale),
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppColors.pureWhite,
@@ -493,13 +688,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _buildAboutLink() {
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AboutUsScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            'Tentang Republik Casual',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.softGrey,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLoginLink() {
+    final locale = context.watch<LanguageProvider>().locale;
     return Center(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'Already have an account? ',
+            Translations.tr('already_have_account', locale),
             style: TextStyle(
               fontSize: 14,
               color: AppColors.softGrey,
@@ -513,9 +731,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 gradient: AppColors.blackGradient,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                'Sign In',
-                style: TextStyle(
+              child: Text(
+                Translations.tr('sign_in', locale),
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppColors.pureWhite,

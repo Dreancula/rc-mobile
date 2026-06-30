@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:rc_mobile_v2/core/database/hive_db.dart';
 import 'package:rc_mobile_v2/core/theme/app_colors.dart';
+import 'package:rc_mobile_v2/core/widgets/product_image.dart';
 import 'package:rc_mobile_v2/features/home/domain/models/product_model.dart';
 
 class AdminProductScreen extends StatefulWidget {
@@ -161,7 +161,7 @@ class _AdminProductScreenState extends State<AdminProductScreen> {
                 decoration: BoxDecoration(color: AppColors.lightGrey, borderRadius: BorderRadius.circular(12)),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: _buildImage(product.imageUrl),
+                  child: ProductImage(imageUrl: product.imageUrl, width: 60, height: 60),
                 ),
               ),
               const SizedBox(width: 12),
@@ -199,18 +199,6 @@ class _AdminProductScreenState extends State<AdminProductScreen> {
     );
   }
 
-  Widget _buildImage(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imgPlaceholder());
-    }
-    if (url.isNotEmpty) {
-      return Image.file(File(url), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imgPlaceholder());
-    }
-    return _imgPlaceholder();
-  }
-
-  Widget _imgPlaceholder() => Container(color: AppColors.lightGrey, child: const Icon(Icons.image_outlined, color: AppColors.softGrey, size: 24));
-
   void _showProductSheet({ProductModel? product}) {
     showModalBottomSheet(
       context: context,
@@ -236,7 +224,9 @@ class _ProductFormSheet extends StatefulWidget {
 class _ProductFormSheetState extends State<_ProductFormSheet> {
   late HiveDb _db;
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameCtrl, _priceCtrl, _descCtrl, _stockCtrl, _weightCtrl;
+  late TextEditingController _nameCtrl, _priceCtrl, _descCtrl, _weightCtrl;
+  late List<TextEditingController> _sizeStockCtrls;
+  late List<String> _sizeLabels;
   late String _category, _imageUrl;
   bool _isSaving = false;
 
@@ -250,10 +240,13 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _nameCtrl = TextEditingController(text: p?.name ?? '');
     _priceCtrl = TextEditingController(text: p != null ? p.price.toStringAsFixed(0) : '');
     _descCtrl = TextEditingController(text: p?.description ?? '');
-    _stockCtrl = TextEditingController(text: p != null ? p.stock.toString() : '');
     _weightCtrl = TextEditingController(text: p != null ? p.weight.toStringAsFixed(0) : '');
     _category = p?.category ?? '';
     _imageUrl = p?.imageUrl ?? '';
+    _sizeLabels = p?.availableSizes.toList() ?? ['S', 'M', 'L', 'XL'];
+    _sizeStockCtrls = _sizeLabels.map((s) => TextEditingController(
+      text: p != null ? p.stockForSize(s).toString() : '50',
+    )).toList();
   }
 
   @override
@@ -261,8 +254,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _nameCtrl.dispose();
     _priceCtrl.dispose();
     _descCtrl.dispose();
-    _stockCtrl.dispose();
     _weightCtrl.dispose();
+    for (final c in _sizeStockCtrls) { c.dispose(); }
     super.dispose();
   }
 
@@ -285,6 +278,10 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     if (!_formKey.currentState!.validate()) return;
     if (_category.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih kategori'))); return; }
     setState(() => _isSaving = true);
+    final stockPerSize = <String, int>{};
+    for (int i = 0; i < _sizeLabels.length; i++) {
+      stockPerSize[_sizeLabels[i]] = int.parse(_sizeStockCtrls[i].text.trim());
+    }
     final product = ProductModel(
       id: _isEditing ? widget.product!.id : DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameCtrl.text.trim(),
@@ -292,7 +289,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       imageUrl: _imageUrl,
       category: _category,
       description: _descCtrl.text.trim(),
-      stock: int.parse(_stockCtrl.text.trim()),
+      stockPerSize: stockPerSize,
+      availableSizes: List.from(_sizeLabels),
       weight: double.parse(_weightCtrl.text.trim()),
       isActive: widget.product?.isActive ?? true,
     );
@@ -343,9 +341,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                               ? Stack(
                                   fit: StackFit.expand,
                                   children: [
-                                    (_imageUrl.startsWith('http://') || _imageUrl.startsWith('https://')
-                                        ? Image.network(_imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imgBig())
-                                        : Image.file(File(_imageUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imgBig())),
+                                    ProductImage(imageUrl: _imageUrl, fit: BoxFit.cover),
                                     Positioned(
                                       top: 8, right: 8,
                                       child: GestureDetector(
@@ -388,11 +384,32 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       decoration: _inputDec('Pilih'),
                       validator: (v) => v == null || v.isEmpty ? 'Wajib pilih' : null,
                     ),
-                    const SizedBox(height: 16),
-                    _field('Stok'),
+                    _field('Stok per Ukuran'),
                     const SizedBox(height: 8),
-                    TextFormField(controller: _stockCtrl, keyboardType: TextInputType.number, decoration: _inputDec('Jumlah stok'),
-                      validator: (v) { if (v == null || v.trim().isEmpty) return 'Wajib diisi'; final s = int.tryParse(v.trim()); if (s == null || s < 0) return 'Tidak valid'; return null; }),
+                    ...List.generate(_sizeLabels.length, (i) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(color: AppColors.pitchBlack, borderRadius: BorderRadius.circular(8)),
+                              child: Text(_sizeLabels[i], textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.pureWhite)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _sizeStockCtrls[i],
+                                keyboardType: TextInputType.number,
+                                decoration: _inputDec('Stok ukuran ${_sizeLabels[i]}'),
+                                validator: (v) { if (v == null || v.trim().isEmpty) return 'Wajib diisi'; final s = int.tryParse(v.trim()); if (s == null || s < 0) return 'Tidak valid'; return null; },
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                     const SizedBox(height: 16),
                     _field('Berat (gram)'),
                     const SizedBox(height: 8),

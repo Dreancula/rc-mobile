@@ -41,8 +41,9 @@ class CartRepository {
     required String selectedSize,
     int quantity = 1,
   }) {
-    if (quantity > product.stock) {
-      throw Exception('Stok ${product.name} tidak mencukupi (tersedia: ${product.stock})');
+    final sizeStock = product.stockForSize(selectedSize);
+    if (quantity > sizeStock) {
+      throw Exception('Stok ${product.name} ukuran $selectedSize tidak mencukupi (tersedia: $sizeStock)');
     }
 
     final existingIndex = _items.indexWhere(
@@ -53,8 +54,8 @@ class CartRepository {
 
     if (existingIndex != -1) {
       final newQty = _items[existingIndex].quantity + quantity;
-      if (newQty > product.stock) {
-        throw Exception('Stok ${product.name} tidak mencukupi (tersedia: ${product.stock}, di keranjang: ${_items[existingIndex].quantity})');
+      if (newQty > sizeStock) {
+        throw Exception('Stok ${product.name} ukuran $selectedSize tidak mencukupi (tersedia: $sizeStock, di keranjang: ${_items[existingIndex].quantity})');
       }
       _items[existingIndex].quantity = newQty;
       _db.saveCartItem(_items[existingIndex]);
@@ -96,7 +97,7 @@ class CartRepository {
     final index = _items.indexWhere((item) => item.id == cartItemId);
     if (index != -1) {
       final product = _db.getProductById(_items[index].productId);
-      final maxStock = product?.stock ?? 999;
+      final maxStock = product?.stockForSize(_items[index].selectedSize) ?? 999;
       if (_items[index].quantity >= maxStock) return;
       _items[index].quantity++;
       _db.saveCartItem(_items[index]);

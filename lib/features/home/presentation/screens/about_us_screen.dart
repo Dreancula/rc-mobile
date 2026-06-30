@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_logo.dart';
 
 class AboutUsScreen extends StatelessWidget {
   const AboutUsScreen({super.key});
@@ -24,25 +25,11 @@ class AboutUsScreen extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlack,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.checkroom,
-                color: AppColors.pureWhite,
-                size: 48,
-              ),
-            ),
+            const AppLogo(size: 100),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Republik Casual',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+              style: AppTextStyles.heading2.copyWith(
                 color: AppColors.pitchBlack,
                 letterSpacing: -0.5,
               ),
@@ -55,26 +42,34 @@ class AboutUsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            Text(
-              'Republik Casual adalah toko fashion online yang menyediakan berbagai pakaian casual berkualitas. '
-              'Kami berkomitmen untuk memberikan produk terbaik dengan harga terjangkau.',
-              style: AppTextStyles.bodyLarge.copyWith(
-                height: 1.6,
-              ),
-              textAlign: TextAlign.center,
+            _sectionText(
+              'Selamat datang di Republik Casual, "negara" digital tempat di mana '
+              'kenyamanan berdaulat penuh dan tampil keren nggak pernah ribet!',
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Berdiri sejak 2024, kami terus berkembang untuk memenuhi kebutuhan fashion casual '
-              'masyarakat Indonesia. Dari T-Shirt, Kemeja, Jaket, Hoodie, hingga Celana — '
-              'semua tersedia di Republik Casual.',
-              style: AppTextStyles.bodyLarge.copyWith(
-                height: 1.6,
-              ),
-              textAlign: TextAlign.center,
+            const SizedBox(height: 20),
+            _sectionText(
+              'Kami tahu banget rasanya terjebak di antara pengen tampil modis '
+              'tapi malas pakai baju yang bikin gerah atau kaku. Itulah kenapa '
+              'Republik Casual lahir. Kami mengurasi fashion items harian terbaik—'
+              'mulai dari streetwear yang hype, kaos esensial yang super nyaman, '
+              'sampai outfit nongkrong yang effortlessly cool—semuanya dikemas '
+              'dalam satu aplikasi yang antiribet.',
+            ),
+            const SizedBox(height: 20),
+            _sectionText(
+              'Bagi kami, kasual itu bukan cuma soal kaos oblong dan celana jins. '
+              'Kasual adalah sebuah statement bahwa kamu bisa menaklukkan hari '
+              'dengan caramu sendiri, tanpa harus mengorbankan kenyamanan. '
+              'Di Republik Casual, semua warga bebas berekspresi, bereksperimen, '
+              'dan jadi versi terbaik dari diri mereka sendiri.',
+            ),
+            const SizedBox(height: 20),
+            _sectionText(
+              'Aturan utama di Republik kita cuma satu: Keep it casual, keep it real. '
+              'Selamat bergabung dan selamat menjelajah, Warga Republik!',
             ),
             const SizedBox(height: 40),
-            Divider(color: AppColors.borderGrey),
+            const Divider(color: AppColors.borderGrey),
             const SizedBox(height: 24),
             _infoRow(Icons.location_on_outlined, 'Jl. Margonda No.8, Depok'),
             const SizedBox(height: 12),
@@ -85,6 +80,16 @@ class AboutUsScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _sectionText(String text) {
+    return Text(
+      text,
+      style: AppTextStyles.bodyLarge.copyWith(
+        height: 1.6,
+      ),
+      textAlign: TextAlign.center,
     );
   }
 

@@ -1,4 +1,6 @@
 import '../../../../core/database/hive_db.dart';
+import '../../../../core/models/notification_model.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../domain/models/order_model.dart';
 import '../../domain/models/product_model.dart';
 import '../../domain/models/cart_model.dart';
@@ -57,8 +59,9 @@ class OrderRepository {
       if (product == null) {
         throw Exception('Produk ${item.name} tidak ditemukan');
       }
-      if (product.stock < item.quantity) {
-        throw Exception('Stok ${item.name} tidak mencukupi (tersedia: ${product.stock}, diminta: ${item.quantity})');
+      final sizeStock = product.stockForSize(item.selectedSize);
+      if (sizeStock < item.quantity) {
+        throw Exception('Stok ${item.name} ukuran ${item.selectedSize} tidak mencukupi (tersedia: $sizeStock, diminta: ${item.quantity})');
       }
     }
 
@@ -92,7 +95,7 @@ class OrderRepository {
           name: cartItem.name,
           price: cartItem.price,
           imageUrl: cartItem.imageUrl,
-          category: '',
+          category: cartItem.selectedSize,
         ));
       }
     }
@@ -119,10 +122,22 @@ class OrderRepository {
     _orders.insert(0, order);
     await _db.saveOrder(order);
 
+    final notifService = NotificationService();
+    await notifService.createNotification(
+      title: 'Pesanan Baru',
+      body: '$userName memesan ${cartItems.length} produk - Rp ${(order.totalPrice).toStringAsFixed(0)}',
+      type: NotificationType.newOrder,
+      orderId: timestamp,
+      recipient: 'admin',
+    );
+
     for (final item in cartItems) {
       final product = _db.getProductById(item.productId);
       if (product != null) {
-        final updated = product.copyWith(stock: product.stock - item.quantity);
+        final currentSizeStock = product.stockForSize(item.selectedSize);
+        final newStockPerSize = Map<String, int>.from(product.stockPerSize);
+        newStockPerSize[item.selectedSize] = currentSizeStock - item.quantity;
+        final updated = product.copyWith(stockPerSize: newStockPerSize);
         await _db.saveProduct(updated);
       }
     }
@@ -134,12 +149,24 @@ class OrderRepository {
     final index = _orders.indexWhere((o) => o.id == orderId);
     if (index != -1) {
       final oldStatus = _orders[index].status;
+      if (oldStatus == newStatus) return;
       OrderModel updated = _orders[index].copyWith(status: newStatus);
 
       if (newStatus == OrderStatus.shipped) {
         updated = updated.copyWith(shippedDate: DateTime.now());
       } else if (newStatus == OrderStatus.delivered) {
         updated = updated.copyWith(deliveredDate: DateTime.now());
+
+        if (oldStatus != OrderStatus.delivered) {
+          final points = (updated.totalPrice / 1000).floor();
+          if (points > 0) {
+            final userEmail = _db.getUserEmailById(updated.userId);
+            if (userEmail != null) {
+              final currentPoints = _db.getPointsBalanceByEmail(userEmail);
+              _db.setPointsBalanceByEmail(userEmail, currentPoints + points);
+            }
+          }
+        }
       } else if (newStatus == OrderStatus.paid) {
         updated = updated.copyWith(paymentDate: DateTime.now());
       }
@@ -150,6 +177,7 @@ class OrderRepository {
 
       _orders[index] = updated;
       _db.updateOrderStatus(orderId, newStatus);
+      _fireStatusNotification(updated, oldStatus, newStatus);
     }
   }
 
@@ -163,6 +191,17 @@ class OrderRepository {
         updated = updated.copyWith(shippedDate: DateTime.now());
       } else if (newStatus == OrderStatus.delivered) {
         updated = updated.copyWith(deliveredDate: DateTime.now());
+
+        if (oldStatus != OrderStatus.delivered) {
+          final points = (updated.totalPrice / 1000).floor();
+          if (points > 0) {
+            final userEmail = repo._db.getUserEmailById(updated.userId);
+            if (userEmail != null) {
+              final currentPoints = repo._db.getPointsBalanceByEmail(userEmail);
+              repo._db.setPointsBalanceByEmail(userEmail, currentPoints + points);
+            }
+          }
+        }
       } else if (newStatus == OrderStatus.paid) {
         updated = updated.copyWith(paymentDate: DateTime.now());
       }
@@ -172,28 +211,86 @@ class OrderRepository {
       }
 
       repo._orders[index] = updated;
+      repo._fireStatusNotification(updated, oldStatus, newStatus);
     }
     await HiveDb.instance.updateOrderStatus(orderId, newStatus);
   }
 
+  void _fireStatusNotification(OrderModel order, OrderStatus oldStatus, OrderStatus newStatus) {
+    final notifService = NotificationService();
+    String title;
+    String body;
+    NotificationType type;
+    String recipient;
+
+    switch (newStatus) {
+      case OrderStatus.paid:
+        title = 'Pembayaran Dikonfirmasi';
+        body = 'Pesanan #${order.id} telah dikonfirmasi pembayarannya';
+        type = NotificationType.paymentConfirmed;
+        recipient = 'user';
+      case OrderStatus.processing:
+        title = 'Pesanan Diproses';
+        body = 'Pesanan #${order.id} sedang diproses';
+        type = NotificationType.orderProcessing;
+        recipient = 'user';
+      case OrderStatus.shipped:
+        title = 'Pesanan Dikirim';
+        body = 'Pesanan #${order.id} sedang dalam pengiriman';
+        type = NotificationType.orderShipped;
+        recipient = 'user';
+      case OrderStatus.delivered:
+        title = 'Pesanan Selesai';
+        body = '${order.userName} telah menerima pesanan #${order.id}';
+        type = NotificationType.orderDelivered;
+        recipient = 'admin';
+      case OrderStatus.cancelled:
+        title = 'Pesanan Dibatalkan';
+        body = '${order.userName} membatalkan pesanan #${order.id}';
+        type = NotificationType.orderCancelled;
+        recipient = 'admin';
+      default:
+        return;
+    }
+
+    notifService.createNotification(
+      title: title,
+      body: body,
+      type: type,
+      orderId: order.id,
+      recipient: recipient,
+    ).catchError((_) {});
+  }
+
   void _restoreStock(OrderModel order) {
+    final restoreMap = <String, Map<String, int>>{};
     for (final item in order.items) {
-      final product = _db.getProductById(item.id);
+      final size = item.category.isNotEmpty ? item.category : 'M';
+      restoreMap.putIfAbsent(item.id, () => {});
+      restoreMap[item.id]![size] = (restoreMap[item.id]![size] ?? 0) + 1;
+    }
+    for (final entry in restoreMap.entries) {
+      final product = _db.getProductById(entry.key);
       if (product != null) {
-        final restored = product.copyWith(stock: product.stock + 1);
-        _db.saveProduct(restored);
+        final newStockPerSize = Map<String, int>.from(product.stockPerSize);
+        for (final sizeEntry in entry.value.entries) {
+          newStockPerSize[sizeEntry.key] = (newStockPerSize[sizeEntry.key] ?? 0) + sizeEntry.value;
+        }
+        _db.saveProduct(product.copyWith(stockPerSize: newStockPerSize));
       }
     }
   }
 
-  void confirmPayment(String orderId) {
+  Future<void> confirmPayment(String orderId) async {
     final index = _orders.indexWhere((o) => o.id == orderId);
     if (index != -1) {
+      final oldStatus = _orders[index].status;
       _orders[index] = _orders[index].copyWith(
         status: OrderStatus.paid,
         paymentDate: DateTime.now(),
       );
-      _db.updateOrderStatus(orderId, OrderStatus.paid);
+      await _db.updateOrderStatus(orderId, OrderStatus.paid);
+      _fireStatusNotification(_orders[index], oldStatus, OrderStatus.paid);
     }
   }
 

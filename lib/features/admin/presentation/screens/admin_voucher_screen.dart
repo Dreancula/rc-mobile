@@ -34,7 +34,11 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
     final percentCtrl = TextEditingController(
       text: voucher != null ? (voucher['discountPercent'] as num?)?.toStringAsFixed(0) ?? '' : '',
     );
+    final pointCostCtrl = TextEditingController(
+      text: voucher != null ? (voucher['pointCost'] as int?)?.toString() ?? '' : '',
+    );
     bool isActive = voucher?['isActive'] as bool? ?? true;
+    bool isPointExchange = voucher?['isPointExchange'] as bool? ?? false;
 
     showDialog(
       context: context,
@@ -71,6 +75,80 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: AppConstants.spacingM),
+                  // Voucher Type
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightGrey,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tipe Voucher', style: AppTextStyles.labelLarge),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setDialogState(() => isPointExchange = false),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: !isPointExchange ? AppColors.pitchBlack : AppColors.pureWhite,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Regular',
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.labelMedium.copyWith(
+                                      color: !isPointExchange ? AppColors.pureWhite : AppColors.pitchBlack,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setDialogState(() => isPointExchange = true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isPointExchange ? AppColors.pitchBlack : AppColors.pureWhite,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Tukar Poin',
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.labelMedium.copyWith(
+                                      color: isPointExchange ? AppColors.pureWhite : AppColors.pitchBlack,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isPointExchange) ...[
+                    const SizedBox(height: AppConstants.spacingM),
+                    TextField(
+                      controller: pointCostCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Harga Poin',
+                        suffixText: 'poin',
+                        filled: true, fillColor: AppColors.lightGrey,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                  const SizedBox(height: AppConstants.spacingM),
                   Row(
                     children: [
                       const Text('Aktif', style: AppTextStyles.bodyMedium),
@@ -100,18 +178,32 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
                 if (percent == null || percent <= 0) return;
 
                 if (voucher == null) {
-                  await _db.addVoucher({
+                  final data = <String, dynamic>{
                     'id': 'v_${DateTime.now().millisecondsSinceEpoch}',
                     'name': name,
                     'discountPercent': percent,
                     'isActive': isActive,
+                    'isPointExchange': isPointExchange,
                     'createdAt': DateTime.now().toIso8601String(),
-                  });
+                  };
+                  if (isPointExchange) {
+                    final cost = int.tryParse(pointCostCtrl.text.trim());
+                    if (cost == null || cost <= 0) return;
+                    data['pointCost'] = cost;
+                  }
+                  await _db.addVoucher(data);
                 } else {
                   final updated = Map<String, dynamic>.from(voucher);
                   updated['name'] = name;
                   updated['discountPercent'] = percent;
                   updated['isActive'] = isActive;
+                  updated['isPointExchange'] = isPointExchange;
+                  if (isPointExchange) {
+                    final cost = int.tryParse(pointCostCtrl.text.trim());
+                    if (cost != null && cost > 0) updated['pointCost'] = cost;
+                  } else {
+                    updated.remove('pointCost');
+                  }
                   await _db.updateVoucher(voucher['id'] as String, updated);
                 }
                 Navigator.pop(ctx);
@@ -213,6 +305,8 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
   Widget _buildVoucherCard(Map<String, dynamic> v) {
     final isActive = v['isActive'] as bool? ?? true;
     final percent = (v['discountPercent'] as num?)?.toDouble() ?? 0;
+    final isPointExchange = v['isPointExchange'] as bool? ?? false;
+    final pointCost = v['pointCost'] as int?;
 
     return GestureDetector(
       onTap: () => _showForm(voucher: v),
@@ -233,16 +327,41 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
                 gradient: isActive ? AppColors.blackGradient : AppColors.softBlackGradient,
                 borderRadius: BorderRadius.circular(AppConstants.radiusS),
               ),
-              child: Icon(Icons.confirmation_num, color: AppColors.pureWhite, size: 24),
+              child: Icon(
+                isPointExchange ? Icons.card_giftcard : Icons.confirmation_num,
+                color: AppColors.pureWhite, size: 24,
+              ),
             ),
             const SizedBox(width: AppConstants.spacingM),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(v['name'] as String? ?? '', style: AppTextStyles.labelLarge),
+                  Row(
+                    children: [
+                      Text(v['name'] as String? ?? '', style: AppTextStyles.labelLarge),
+                      if (isPointExchange) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.pitchBlack.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text('Poin', style: AppTextStyles.caption.copyWith(
+                            fontSize: 9, fontWeight: FontWeight.w600, color: AppColors.pitchBlack,
+                          )),
+                        ),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 2),
-                  Text('Diskon ${percent.toStringAsFixed(0)}%', style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey)),
+                  Text(
+                    isPointExchange
+                        ? '${pointCost ?? 0} poin • Diskon ${percent.toStringAsFixed(0)}%'
+                        : 'Diskon ${percent.toStringAsFixed(0)}%',
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey),
+                  ),
                 ],
               ),
             ),

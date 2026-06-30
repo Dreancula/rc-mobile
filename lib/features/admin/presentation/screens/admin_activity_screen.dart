@@ -4,6 +4,7 @@ import 'package:rc_mobile_v2/core/database/hive_db.dart';
 import 'package:rc_mobile_v2/core/theme/app_colors.dart';
 import 'package:rc_mobile_v2/core/theme/app_text_styles.dart';
 import 'package:rc_mobile_v2/core/constants/app_constants.dart';
+import 'package:rc_mobile_v2/core/widgets/product_image.dart';
 import 'package:rc_mobile_v2/features/home/domain/models/order_model.dart';
 
 class AdminActivityScreen extends StatefulWidget {
@@ -171,7 +172,7 @@ class _AdminActivityScreenState extends State<AdminActivityScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(7),
-                    child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image, size: 18, color: AppColors.softGrey)),
+                    child: ProductImage(imageUrl: item.imageUrl, width: 36, height: 36),
                   ),
                 ),
               )),

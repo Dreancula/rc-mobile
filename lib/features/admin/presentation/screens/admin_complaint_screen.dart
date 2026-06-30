@@ -21,6 +21,9 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
   final OrderRepository _orderRepo = OrderRepository();
   List<Map<String, dynamic>> _complaints = [];
 
+  // ===== FILTER STATUS =====
+  String _statusFilter = 'Semua';
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +36,29 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     });
   }
 
-  Future<void> _processRefund(String id, double refundAmount, String userEmail) async {
+  // ===== GET COMPLAINTS WITH FILTER =====
+  List<Map<String, dynamic>> get _filteredComplaints {
+    if (_statusFilter == 'Semua') return _complaints;
+    return _complaints.where((c) {
+      final status = c['status'] as String? ?? 'pending';
+      switch (_statusFilter) {
+        case 'Menunggu':
+          return status == 'pending';
+        case 'Disetujui':
+          return status == 'resolved';
+        case 'Ditolak':
+          return status == 'rejected';
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
+  Future<void> _processRefund(
+    String id,
+    double refundAmount,
+    String userEmail,
+  ) async {
     await _db.updateComplaintStatus(id, 'resolved');
     await _db.deductRcBalance(refundAmount);
     final raw = _db.usersBox.get(userEmail);
@@ -47,7 +72,9 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Pengembalian dana Rp ${refundAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} berhasil'),
+        content: Text(
+          'Pengembalian dana Rp ${refundAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} berhasil',
+        ),
         backgroundColor: AppColors.primaryBlack,
         behavior: SnackBarBehavior.floating,
       ),
@@ -76,7 +103,9 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
       isScrollControlled: true,
       backgroundColor: AppColors.pureWhite,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppConstants.radiusL)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppConstants.radiusL),
+        ),
       ),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.9,
@@ -91,7 +120,8 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.borderGrey,
                     borderRadius: BorderRadius.circular(2),
@@ -102,7 +132,10 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
               // Complaint section
               _buildDetailHeader(c),
               const SizedBox(height: AppConstants.spacingM),
-              _detailSection('Deskripsi Komplain', c['description'] as String? ?? ''),
+              _detailSection(
+                'Deskripsi Komplain',
+                c['description'] as String? ?? '',
+              ),
               const SizedBox(height: AppConstants.spacingM),
               _buildPhotoSection(c),
               _buildRefundInfo(c),
@@ -111,7 +144,14 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
               if (order != null) ...[
                 const Divider(color: AppColors.borderGrey),
                 const SizedBox(height: AppConstants.spacingM),
-                Text('Detail Pesanan', style: AppTextStyles.bodyLarge),
+                const Text(
+                  'Detail Pesanan',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.pitchBlack,
+                  ),
+                ),
                 const SizedBox(height: AppConstants.spacingM),
                 _buildOrderDetail(order),
               ],
@@ -135,10 +175,15 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.success,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                              borderRadius: BorderRadius.circular(
+                                AppConstants.radiusS,
+                              ),
                             ),
                           ),
-                          child: const Text('Setuju & Refund', style: AppTextStyles.buttonText),
+                          child: const Text(
+                            'Setuju & Refund',
+                            style: AppTextStyles.buttonText,
+                          ),
                         ),
                       ),
                     ),
@@ -155,7 +200,9 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
                             foregroundColor: AppColors.error,
                             side: const BorderSide(color: AppColors.error),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                              borderRadius: BorderRadius.circular(
+                                AppConstants.radiusS,
+                              ),
                             ),
                           ),
                           child: const Text('Tolak'),
@@ -177,36 +224,62 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     final status = c['status'] as String? ?? 'pending';
     final isPending = status == 'pending';
     final isResolved = status == 'resolved';
-    final statusColor = isPending ? AppColors.warning : (isResolved ? AppColors.success : AppColors.error);
-    final statusText = isPending ? 'Menunggu' : (isResolved ? 'Disetujui' : 'Ditolak');
+    final statusColor = isPending
+        ? AppColors.warning
+        : (isResolved ? AppColors.success : AppColors.error);
+    final statusText = isPending
+        ? 'Menunggu'
+        : (isResolved ? 'Disetujui' : 'Ditolak');
 
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: isPending ? AppColors.warning.withValues(alpha: 0.1) : AppColors.lightGrey,
-            borderRadius: BorderRadius.circular(AppConstants.radiusS),
+            gradient: AppColors.softBlackGradient,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(Icons.feedback_outlined, color: isPending ? AppColors.warning : AppColors.darkGrey, size: 24),
+          child: Icon(
+            Icons.feedback_outlined,
+            color: isPending ? AppColors.warning : AppColors.pureWhite,
+            size: 22,
+          ),
         ),
-        const SizedBox(width: AppConstants.spacingM),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(c['userName'] as String? ?? '', style: AppTextStyles.bodyLarge),
-              Text(c['userEmail'] as String? ?? '', style: AppTextStyles.caption),
+              Text(
+                c['userName'] as String? ?? '',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.pitchBlack,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                c['userEmail'] as String? ?? '',
+                style: const TextStyle(fontSize: 12, color: AppColors.softGrey),
+              ),
             ],
           ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: statusColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+            borderRadius: BorderRadius.circular(6),
           ),
-          child: Text(statusText, style: AppTextStyles.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600)),
+          child: Text(
+            statusText,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: statusColor,
+            ),
+          ),
         ),
       ],
     );
@@ -216,16 +289,33 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.labelMedium.copyWith(color: AppColors.softGrey)),
-        const SizedBox(height: AppConstants.spacingS),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.softGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(AppConstants.spacingM),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
-            borderRadius: BorderRadius.circular(AppConstants.radiusS),
+            color: AppColors.pureWhite,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.borderGrey.withValues(alpha: 0.5),
+            ),
           ),
-          child: Text(content, style: AppTextStyles.bodyMedium.copyWith(height: 1.5)),
+          child: Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.pitchBlack,
+              height: 1.5,
+            ),
+          ),
         ),
       ],
     );
@@ -234,26 +324,35 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
   Widget _buildPhotoSection(Map<String, dynamic> c) {
     final photos = (c['photos'] as List?)?.cast<String>() ?? [];
     if (photos.isEmpty) return const SizedBox.shrink();
+    final borderColor = AppColors.borderGrey.withValues(alpha: 0.5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Foto Bukti', style: AppTextStyles.labelMedium.copyWith(color: AppColors.softGrey)),
-        const SizedBox(height: AppConstants.spacingS),
+        Text(
+          'Foto Bukti',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.softGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 100,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: photos.length,
-            separatorBuilder: (_, _) => const SizedBox(width: AppConstants.spacingS),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               return Container(
-                width: 100, height: 100,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppConstants.radiusS),
-                  border: Border.all(color: AppColors.borderGrey),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: borderColor),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppConstants.radiusS - 1),
+                  borderRadius: BorderRadius.circular(9),
                   child: photos[i].startsWith('http')
                       ? Image.network(photos[i], fit: BoxFit.cover)
                       : Image.file(File(photos[i]), fit: BoxFit.cover),
@@ -275,48 +374,76 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     final date = DateTime.tryParse(createdAt);
 
     return Padding(
-      padding: const EdgeInsets.only(top: AppConstants.spacingM),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(AppConstants.spacingM),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isResolved ? AppColors.success.withValues(alpha: 0.1) : AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(AppConstants.radiusS),
+              color: AppColors.pureWhite,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.borderGrey.withValues(alpha: 0.5),
+              ),
             ),
             child: Row(
               children: [
-                Icon(isResolved ? Icons.check_circle : Icons.account_balance_wallet_outlined, size: 18,
-                    color: isResolved ? AppColors.success : AppColors.darkGrey),
-                const SizedBox(width: AppConstants.spacingS),
+                Icon(
+                  isResolved
+                      ? Icons.check_circle
+                      : Icons.account_balance_wallet_outlined,
+                  size: 18,
+                  color: isResolved ? AppColors.success : AppColors.darkGrey,
+                ),
+                const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total Pesanan', style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey)),
-                    Text('Rp ${orderTotal.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                        style: AppTextStyles.labelLarge),
+                    const Text(
+                      'Total Pesanan',
+                      style: TextStyle(fontSize: 11, color: AppColors.softGrey),
+                    ),
+                    Text(
+                      'Rp ${orderTotal.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.pitchBlack,
+                      ),
+                    ),
                   ],
                 ),
                 const Spacer(),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('Pengembalian 30%', style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkGrey)),
-                    Text('Rp ${refundAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                        style: AppTextStyles.labelLarge.copyWith(color: isResolved ? AppColors.success : AppColors.primaryBlack)),
+                    const Text(
+                      'Pengembalian 30%',
+                      style: TextStyle(fontSize: 11, color: AppColors.softGrey),
+                    ),
+                    Text(
+                      'Rp ${refundAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isResolved
+                            ? AppColors.success
+                            : AppColors.pitchBlack,
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
           if (date != null) ...[
-            const SizedBox(height: AppConstants.spacingS),
+            const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'Diajukan: ${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                style: AppTextStyles.caption.copyWith(color: AppColors.softGrey),
+                style: const TextStyle(fontSize: 11, color: AppColors.softGrey),
               ),
             ),
           ],
@@ -328,10 +455,11 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
   Widget _buildOrderDetail(OrderModel order) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppConstants.spacingM),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(AppConstants.radiusM),
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderGrey.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,87 +470,153 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.pureWhite,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                  gradient: AppColors.softBlackGradient,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.receipt_outlined, size: 20, color: AppColors.primaryBlack),
+                child: const Icon(
+                  Icons.receipt_outlined,
+                  size: 16,
+                  color: AppColors.pureWhite,
+                ),
               ),
-              const SizedBox(width: AppConstants.spacingM),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Pesanan #${order.id.substring(max(0, order.id.length - 6))}',
-                        style: AppTextStyles.labelLarge),
-                    Text(order.orderDate.toLocal().toString().substring(0, 16),
-                        style: AppTextStyles.caption),
+                    Text(
+                      'Pesanan #${order.id.substring(max(0, order.id.length - 6))}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.pitchBlack,
+                      ),
+                    ),
+                    Text(
+                      order.orderDate.toLocal().toString().substring(0, 16),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.softGrey,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.pureWhite,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                  color: AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(order.status.displayName,
-                    style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+                child: Text(
+                  order.status.displayName,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkGrey,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppConstants.spacingM),
+          const SizedBox(height: 12),
           // Items
-          ...order.items.map((item) => Padding(
-            padding: const EdgeInsets.only(bottom: AppConstants.spacingM),
-            child: Row(
-              children: [
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusS),
-                    border: Border.all(color: AppColors.borderGrey),
+          ...order.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.borderGrey.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(7),
+                      child: ProductImage(
+                        imageUrl: item.imageUrl,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusS - 1),
-                    child: ProductImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.pitchBlack,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          '${item.weight.toStringAsFixed(0)}g',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.softGrey,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppConstants.spacingM),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text('${item.weight.toStringAsFixed(0)}g', style: AppTextStyles.caption.copyWith(color: AppColors.softGrey)),
-                    ],
+                  Text(
+                    'Rp ${item.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.pitchBlack,
+                    ),
                   ),
-                ),
-                Text(
-                  'Rp ${item.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                  style: AppTextStyles.labelLarge,
-                ),
-              ],
+                ],
+              ),
             ),
-          )),
+          ),
           const Divider(height: 1, color: AppColors.borderGrey),
-          const SizedBox(height: AppConstants.spacingS),
+          const SizedBox(height: 8),
           // Shipping info
           if (order.courier != null) ...[
-            _orderInfoRow('Kurir', '${order.courier} - ${order.courierService ?? ''}'),
+            _orderInfoRow(
+              'Kurir',
+              '${order.courier} - ${order.courierService ?? ''}',
+            ),
             _orderInfoRow('Estimasi', order.estimatedDelivery ?? '-'),
           ],
-          _orderInfoRow('Pengiriman', 'Rp ${order.shippingCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}'),
+          _orderInfoRow(
+            'Pengiriman',
+            'Rp ${order.shippingCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+          ),
           _orderInfoRow('Pembayaran', order.paymentMethod.displayName),
-          const SizedBox(height: AppConstants.spacingS),
+          const SizedBox(height: 8),
           const Divider(height: 1, color: AppColors.borderGrey),
-          const SizedBox(height: AppConstants.spacingS),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total', style: AppTextStyles.labelLarge),
+              const Text(
+                'Total',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.pitchBlack,
+                ),
+              ),
               Text(
                 'Rp ${order.totalPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.primaryBlack, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.pitchBlack,
+                ),
               ),
             ],
           ),
@@ -437,48 +631,146 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey)),
-          Text(value, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.softGrey),
+          ),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.pitchBlack,
+            ),
+          ),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // ===== MAIN BUILD =====
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pureWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.pureWhite,
-        elevation: 0,
-        title: Text(
-          'Komplain',
-          style: AppTextStyles.heading4.copyWith(color: AppColors.primaryBlack),
-        ),
-        centerTitle: true,
-      ),
-      body: _complaints.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.feedback_outlined, size: 64, color: AppColors.softGrey),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Belum ada komplain',
-                    style: AppTextStyles.heading4.copyWith(color: AppColors.softGrey),
+      backgroundColor: AppColors.offWhite,
+      body: Column(
+        children: [
+          // ===== HEADER (TANPA TOMBOL DOWNLOAD) =====
+          Container(
+            color: AppColors.pureWhite,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.softBlackGradient,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.feedback_outlined,
+                        color: AppColors.pureWhite,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Manajemen Komplain',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.pitchBlack,
+                      ),
+                    ),
+                    // ===== SPACER (tanpa tombol download) =====
+                    const Spacer(),
+                    // ===== TOMBOL DOWNLOAD DIHAPUS =====
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // ===== FILTER CHIPS =====
+                SizedBox(
+                  height: 34,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: ['Semua', 'Menunggu', 'Disetujui', 'Ditolak'].map(
+                      (s) {
+                        final sel = s == _statusFilter;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => setState(() => _statusFilter = s),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: sel ? AppColors.blackGradient : null,
+                                color: sel ? null : AppColors.lightGrey,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  s,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: sel
+                                        ? AppColors.pureWhite
+                                        : AppColors.softGrey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ).toList(),
                   ),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: () async => _loadComplaints(),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(AppConstants.spacingM),
-                itemCount: _complaints.length,
-                itemBuilder: (context, index) => _buildComplaintCard(_complaints[index]),
-              ),
+                ),
+              ],
             ),
+          ),
+          // ===== LIST COMPLAINTS =====
+          Expanded(
+            child: _filteredComplaints.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.feedback_outlined,
+                          size: 48,
+                          color: AppColors.softGrey,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Belum ada komplain',
+                          style: AppTextStyles.heading4.copyWith(
+                            color: AppColors.softGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () async => _loadComplaints(),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(AppConstants.spacingM),
+                      itemCount: _filteredComplaints.length,
+                      itemBuilder: (context, index) =>
+                          _buildComplaintCard(_filteredComplaints[index]),
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -486,60 +778,95 @@ class _AdminComplaintScreenState extends State<AdminComplaintScreen> {
     final status = c['status'] as String? ?? 'pending';
     final isPending = status == 'pending';
     final isResolved = status == 'resolved';
-    final statusColor = isPending ? AppColors.warning : (isResolved ? AppColors.success : AppColors.error);
-    final statusText = isPending ? 'Menunggu' : (isResolved ? 'Disetujui' : 'Ditolak');
+    final statusColor = isPending
+        ? AppColors.warning
+        : (isResolved ? AppColors.success : AppColors.error);
+    final statusText = isPending
+        ? 'Menunggu'
+        : (isResolved ? 'Disetujui' : 'Ditolak');
     final refundAmount = (c['refundAmount'] as num?)?.toDouble() ?? 0;
     final orderNumber = c['orderNumber'] as String? ?? '';
 
     return GestureDetector(
       onTap: () => _showDetail(c),
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
-        padding: const EdgeInsets.all(AppConstants.spacingM),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.pureWhite,
-          borderRadius: BorderRadius.circular(AppConstants.radiusM),
-          border: Border.all(color: AppColors.borderGrey),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.borderGrey.withValues(alpha: 0.5),
+          ),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isPending ? AppColors.warning.withValues(alpha: 0.1) : AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(AppConstants.radiusS),
+                gradient: AppColors.softBlackGradient,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.feedback_outlined,
-                color: isPending ? AppColors.warning : AppColors.darkGrey,
+                color: isPending ? AppColors.warning : AppColors.pureWhite,
                 size: 20,
               ),
             ),
-            const SizedBox(width: AppConstants.spacingM),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(c['userName'] as String? ?? '', style: AppTextStyles.labelLarge),
+                  Text(
+                    c['userName'] as String? ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.pitchBlack,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('Pesanan #$orderNumber', style: AppTextStyles.caption),
+                  Text(
+                    'Pesanan #$orderNumber',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.softGrey,
+                    ),
+                  ),
                   Text(
                     'Refund: Rp ${refundAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.darkGrey),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.darkGrey,
+                    ),
                   ),
                 ],
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(statusText, style: AppTextStyles.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600)),
+              child: Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor,
+                ),
+              ),
             ),
-            const SizedBox(width: AppConstants.spacingS),
-            const Icon(Icons.chevron_right, size: 20, color: AppColors.softGrey),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.softGrey,
+            ),
           ],
         ),
       ),
