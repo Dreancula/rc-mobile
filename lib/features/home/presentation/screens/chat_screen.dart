@@ -3,6 +3,8 @@ import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/models/chat_message_model.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -16,6 +18,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _db = HiveDb.instance;
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _imagePicker = ImagePicker();
   late String _email;
   late String _name;
   bool _isLoading = false;
@@ -46,6 +49,71 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<ChatMessageModel> get _messages => _db.getMessages(_email);
 
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: AppColors.pitchBlack),
+              title: const Text('Kamera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: AppColors.pitchBlack),
+              title: const Text('Galeri Foto'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        _sendImage(pickedFile.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal memilih foto')),
+        );
+      }
+    }
+  }
+
+  void _sendImage(String imagePath) {
+    _db.sendMessage(
+      ChatMessageModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        senderEmail: _email,
+        senderName: _name,
+        senderRole: 'user',
+        message: 'Mengirim foto',
+        timestamp: DateTime.now(),
+        receiverEmail: 'admin@admin.com',
+        imageUrl: imagePath,
+      ),
+    );
+    setState(() {});
+    _scrollToBottom();
+  }
+
   void _send() {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty || _isLoading) return;
@@ -61,6 +129,7 @@ class _ChatScreenState extends State<ChatScreen> {
         senderRole: 'user',
         message: text,
         timestamp: DateTime.now(),
+        receiverEmail: 'admin@admin.com', // Admin email
       ),
     );
 
@@ -212,6 +281,75 @@ class _ChatScreenState extends State<ChatScreen> {
   // MESSAGE BUBBLE
   // ============================================================
   Widget _buildBubble(ChatMessageModel msg, bool isMe) {
+    // Handle image message
+    if (msg.isImageMessage) {
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.65,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.pitchBlack.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.file(
+                  File(msg.imageUrl!),
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 150,
+                    color: AppColors.lightGrey,
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: AppColors.softGrey),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: isMe ? AppColors.pitchBlack : AppColors.pureWhite,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isMe) ...[
+                        Text(
+                          msg.senderName,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.darkGrey,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        _formatTime(msg.timestamp),
+                        style: AppTextStyles.caption.copyWith(
+                          fontSize: 10,
+                          color: isMe ? AppColors.pureWhite.withValues(alpha: 0.6) : AppColors.softGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Text message
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -291,6 +429,25 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       child: Row(
         children: [
+          // Camera Button
+          GestureDetector(
+            onTap: _pickImage,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: AppColors.softBlackGradient,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.camera_alt,
+                color: AppColors.pureWhite,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Text Input
           Expanded(
             child: Container(
               decoration: BoxDecoration(

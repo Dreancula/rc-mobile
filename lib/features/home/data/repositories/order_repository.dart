@@ -70,6 +70,10 @@ class OrderRepository {
     final orderId = DateTime.now().millisecondsSinceEpoch.toString();
     final timestamp = orderId + (DateTime.now().microsecondsSinceEpoch % 1000).toString().padLeft(3, '0');
 
+    // Generate order number: RC-001, RC-002, etc.
+    final orderCount = _orders.length + 1;
+    final orderNumber = 'RC-${orderCount.toString().padLeft(3, '0')}';
+
     final session = _db.getUserSession();
     if (session == null) throw Exception('Sesi login tidak ditemukan');
 
@@ -104,6 +108,7 @@ class OrderRepository {
 
     final order = OrderModel(
       id: timestamp,
+      orderNumber: orderNumber,
       userId: userId,
       userName: userName,
       userAddress: userAddress,
@@ -130,7 +135,7 @@ class OrderRepository {
     final notifService = NotificationService();
     await notifService.createNotification(
       title: 'Pesanan Baru',
-      body: '$userName memesan ${cartItems.length} produk - Rp ${(order.totalPrice).toStringAsFixed(0)}',
+      body: '$userName memesan ${cartItems.length} produk ($orderNumber) - Rp ${(order.totalPrice).toStringAsFixed(0)}',
       type: NotificationType.newOrder,
       orderId: timestamp,
       recipient: 'admin',
@@ -221,6 +226,51 @@ class OrderRepository {
     await HiveDb.instance.updateOrderStatus(orderId, newStatus);
   }
 
+  static Future<void> syncOrderStatusWithTracking(
+    String orderId,
+    OrderStatus newStatus, {
+    required String trackingNumber,
+  }) async {
+    final repo = OrderRepository();
+    final index = repo._orders.indexWhere((o) => o.id == orderId);
+    if (index != -1) {
+      final oldStatus = repo._orders[index].status;
+      OrderModel updated = repo._orders[index].copyWith(
+        status: newStatus,
+        trackingNumber: trackingNumber.isNotEmpty ? trackingNumber : null,
+      );
+      if (newStatus == OrderStatus.shipped) {
+        updated = updated.copyWith(shippedDate: DateTime.now());
+      } else if (newStatus == OrderStatus.delivered) {
+        updated = updated.copyWith(deliveredDate: DateTime.now());
+
+        if (oldStatus != OrderStatus.delivered) {
+          final points = (updated.totalPrice / 1000).floor();
+          if (points > 0) {
+            final userEmail = repo._db.getUserEmailById(updated.userId);
+            if (userEmail != null) {
+              final currentPoints = repo._db.getPointsBalanceByEmail(userEmail);
+              repo._db.setPointsBalanceByEmail(userEmail, currentPoints + points);
+            }
+          }
+        }
+      } else if (newStatus == OrderStatus.paid) {
+        updated = updated.copyWith(paymentDate: DateTime.now());
+      }
+
+      if (newStatus == OrderStatus.cancelled && oldStatus != OrderStatus.cancelled) {
+        repo._restoreStock(updated);
+      }
+
+      repo._orders[index] = updated;
+      repo._fireStatusNotification(updated, oldStatus, newStatus);
+    }
+    await HiveDb.instance.updateOrderStatus(orderId, newStatus);
+    if (trackingNumber.isNotEmpty) {
+      await HiveDb.instance.updateOrderTracking(orderId, trackingNumber);
+    }
+  }
+
   void _fireStatusNotification(OrderModel order, OrderStatus oldStatus, OrderStatus newStatus) {
     final notifService = NotificationService();
     String title;
@@ -231,27 +281,27 @@ class OrderRepository {
     switch (newStatus) {
       case OrderStatus.paid:
         title = 'Pembayaran Dikonfirmasi';
-        body = 'Pesanan #${order.id} telah dikonfirmasi pembayarannya';
+        body = 'Pesanan ${order.orderNumber} telah dikonfirmasi pembayarannya';
         type = NotificationType.paymentConfirmed;
         recipient = 'user';
       case OrderStatus.processing:
         title = 'Pesanan Diproses';
-        body = 'Pesanan #${order.id} sedang diproses';
+        body = 'Pesanan ${order.orderNumber} sedang diproses';
         type = NotificationType.orderProcessing;
         recipient = 'user';
       case OrderStatus.shipped:
         title = 'Pesanan Dikirim';
-        body = 'Pesanan #${order.id} sedang dalam pengiriman';
+        body = 'Pesanan ${order.orderNumber} sedang dalam pengiriman';
         type = NotificationType.orderShipped;
         recipient = 'user';
       case OrderStatus.delivered:
         title = 'Pesanan Selesai';
-        body = '${order.userName} telah menerima pesanan #${order.id}';
+        body = '${order.userName} telah menerima pesanan ${order.orderNumber}';
         type = NotificationType.orderDelivered;
         recipient = 'admin';
       case OrderStatus.cancelled:
         title = 'Pesanan Dibatalkan';
-        body = '${order.userName} membatalkan pesanan #${order.id}';
+        body = '${order.userName} membatalkan pesanan ${order.orderNumber}';
         type = NotificationType.orderCancelled;
         recipient = 'admin';
       default:

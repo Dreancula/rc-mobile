@@ -212,13 +212,26 @@ class PdfGenerator {
           pw.SizedBox(height: 8),
           _buildInfoTable([
             _row(
-              'Total Pendapatan',
+              'Revenue Produk',
               _formatRp(report.totalRevenue),
               boldFont,
               font,
             ),
             _row(
-              'Total Kerugian',
+              'Ongkir (Pass-through)',
+              _formatRp(report.totalShippingCollected),
+              boldFont,
+              font,
+            ),
+            _row(
+              'Total Penjualan Kotor',
+              _formatRp(report.totalGrossSales),
+              boldFont,
+              font,
+            ),
+            pw.SizedBox(height: 8),
+            _row(
+              'Total Potongan/Diskon',
               _formatRp(report.totalLoss),
               boldFont,
               font,
@@ -248,17 +261,19 @@ class PdfGenerator {
               font,
             ),
             _row(
-              'Keuntungan Admin',
+              'Fee Admin',
               _formatRp(report.totalAdminFeeProfit),
               boldFont,
               font,
             ),
+            pw.SizedBox(height: 8),
             _row(
-              'Tabungan Bersih',
+              'Keuntungan Bersih',
               _formatRp(report.netSavings),
               boldFont,
               font,
             ),
+            pw.SizedBox(height: 8),
             _row('Total Pesanan', '${report.totalOrders}', boldFont, font),
             _row(
               'Pesanan Selesai',

@@ -70,6 +70,24 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
         centerTitle: true,
         actions: [
+          // Settings Icon - First
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminSettingsScreen()),
+            ),
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(
+                gradient: AppColors.softBlackGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.settings_outlined, color: AppColors.pureWhite, size: 20),
+            ),
+          ),
+          // Notification Icon - Second
           Consumer<NotificationService>(
             builder: (context, notifService, _) {
               final count = notifService.unreadAdminCount;
@@ -110,20 +128,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               );
             },
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => _scaffoldKey.currentState?.openDrawer(),
-              child: Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  gradient: AppColors.softBlackGradient,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.person_outline, color: AppColors.pureWhite, size: 20),
-              ),
-            ),
           ),
         ],
       ),

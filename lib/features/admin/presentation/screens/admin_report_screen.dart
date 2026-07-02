@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:rc_mobile_v2/core/database/hive_db.dart';
 import 'package:rc_mobile_v2/core/theme/app_colors.dart';
 import 'package:rc_mobile_v2/features/admin/data/services/report_service.dart';
@@ -360,39 +361,24 @@ class _AdminReportScreenState extends State<AdminReportScreen>
     final r = _financialReport;
     if (r == null) return const SizedBox();
 
-    // ===== MEKANIK HARIAN BERDASARKAN BULAN =====
-    // Generate semua tanggal dalam rentang (termasuk yang tidak ada data)
-    final allDates = <DateTime>[];
-    DateTime current = _startDate;
-    while (current.isBefore(_endDate) || current.isAtSameMomentAs(_endDate)) {
-      allDates.add(current);
-      current = current.add(const Duration(days: 1));
+    // Generate 7 days for trend chart
+    final trendDays = List.generate(7, (i) {
+      return DateTime.now().subtract(Duration(days: 6 - i));
+    });
+
+    final Map<int, double> trendData = {};
+    double maxTrendValue = 0;
+    for (int i = 0; i < trendDays.length; i++) {
+      final day = trendDays[i];
+      final dayRevenue = r.dailySummaries.entries
+          .where((e) =>
+              e.key.year == day.year &&
+              e.key.month == day.month &&
+              e.key.day == day.day)
+          .fold<double>(0, (s, e) => s + e.value.revenue);
+      trendData[i] = dayRevenue;
+      if (dayRevenue > maxTrendValue) maxTrendValue = dayRevenue;
     }
-
-    // Map data ke semua tanggal
-    final Map<DateTime, DailySummary> fullMap = {};
-    for (var date in allDates) {
-      final key = DateTime(date.year, date.month, date.day);
-      if (r.dailySummaries.containsKey(key)) {
-        fullMap[key] = r.dailySummaries[key]!;
-      } else {
-        fullMap[key] = DailySummary(date: key, revenue: 0, orderCount: 0);
-      }
-    }
-
-    final sortedEntries = fullMap.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-
-    final totalDailyRevenue = sortedEntries.fold<double>(
-      0,
-      (s, e) => s + e.value.revenue,
-    );
-    final daysActive = sortedEntries.where((e) => e.value.revenue > 0).length;
-    final bestDay = sortedEntries.isEmpty
-        ? null
-        : sortedEntries.reduce(
-            (a, b) => a.value.revenue >= b.value.revenue ? a : b,
-          );
 
     return RefreshIndicator(
       color: AppColors.pitchBlack,
@@ -402,100 +388,200 @@ class _AdminReportScreenState extends State<AdminReportScreen>
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
+            // === ROW 1: Revenue & Shipping ===
             _StatRow(
               children: [
-                _MiniStatCard(
-                  icon: Icons.trending_up_rounded,
+                _StatCard(
+                  title: 'Revenue Produk',
                   value: 'Rp ${_f(r.totalRevenue)}',
-                  label: 'Total Pendapatan',
-                  color: 0xFF2D2D2D,
+                  icon: Icons.trending_up_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF2D2D2D), Color(0xFF0A0A0A)]),
+                  onTap: () => _showFinancialDetail(
+                    'Revenue Produk',
+                    'Pendapatan dari penjualan produk (EXCLUDE ongkir)',
+                    Icons.trending_up_rounded,
+                    const Color(0xFF2D2D2D),
+                    [
+                      _DetailItem(title: 'Total Harga Produk', value: 'Rp ${_f(r.totalRevenue)}', description: 'Total harga produk yang terjual'),
+                      _DetailItem(title: 'Rumus', value: 'Harga - Ongkir', color: AppColors.softGrey),
+                      _DetailItem(title: 'Kenapa exclude ongkir?', value: '', description: 'Ongkir adalah pass-through ke kurir, bukan revenue kami'),
+                    ],
+                  ),
                 ),
-                _MiniStatCard(
+                _StatCard(
+                  title: 'Ongkir',
+                  value: 'Rp ${_f(r.totalShippingCollected)}',
+                  icon: Icons.local_shipping_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF5D4037), Color(0xFF3E2723)]),
+                  onTap: () => _showFinancialDetail(
+                    'Ongkir (Pass-through)',
+                    'Uang ongkir yang dikumpulkan untuk kurir',
+                    Icons.local_shipping_rounded,
+                    const Color(0xFF5D4037),
+                    [
+                      _DetailItem(title: 'Total Ongkir', value: 'Rp ${_f(r.totalShippingCollected)}', description: 'Total ongkir dari semua pesanan selesai'),
+                      _DetailItem(title: 'Status', value: 'Pass-through', color: AppColors.warning),
+                      _DetailItem(title: 'Penjelasan', value: '', description: 'Uang ongkir bukan revenue kami. Nanti dibayar ke pihak ketiga (kurir).'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // === ROW 2: Gross Sales & Net Profit ===
+            _StatRow(
+              children: [
+                _StatCard(
+                  title: 'Total Penjualan',
+                  value: 'Rp ${_f(r.totalGrossSales)}',
+                  icon: Icons.account_balance_wallet_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF1A237E), Color(0xFF0D1442)]),
+                  onTap: () => _showFinancialDetail(
+                    'Total Penjualan Kotor',
+                    'Total semua uang yang masuk (gross sales)',
+                    Icons.account_balance_wallet_rounded,
+                    const Color(0xFF1A237E),
+                    [
+                      _DetailItem(title: 'Gross Sales', value: 'Rp ${_f(r.totalGrossSales)}', description: 'Total semua transaksi'),
+                      _DetailItem(title: 'Rumus', value: 'Revenue + Ongkir', color: AppColors.softGrey),
+                    ],
+                  ),
+                ),
+                _StatCard(
+                  title: 'Keuntungan Bersih',
+                  value: 'Rp ${_f(r.netSavings > 0 ? r.netSavings : 0)}',
                   icon: Icons.savings_rounded,
-                  value: 'Rp ${_f(r.netSavings)}',
-                  label: 'Tabungan Bersih',
-                  color: 0xFF1B5E20,
+                  gradient: r.netSavings >= 0
+                      ? const LinearGradient(colors: [Color(0xFF1B5E20), Color(0xFF0D3B0F)])
+                      : const LinearGradient(colors: [Color(0xFFC62828), Color(0xFF8B0000)]),
+                  onTap: () => _showFinancialDetail(
+                    'Keuntungan Bersih',
+                    'Profit bersih setelah semua potongan',
+                    Icons.savings_rounded,
+                    r.netSavings >= 0 ? const Color(0xFF1B5E20) : const Color(0xFFC62828),
+                    [
+                      _DetailItem(title: 'Revenue Produk', value: 'Rp ${_f(r.totalRevenue)}', color: AppColors.success),
+                      _DetailItem(title: 'Total Diskon/Potongan', value: '- Rp ${_f(r.totalLoss)}', color: AppColors.error),
+                      _DetailItem(title: 'Fee Admin', value: '+ Rp ${_f(r.totalAdminFeeProfit)}', color: AppColors.info),
+                      _DetailItem(title: 'Keuntungan Bersih', value: 'Rp ${_f(r.netSavings)}', description: 'Revenue - Diskon + Fee Admin'),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
+
+            // === ROW 3: Discounts & Fee Admin ===
             _StatRow(
               children: [
-                _MiniStatCard(
-                  icon: Icons.trending_down_rounded,
+                _StatCard(
+                  title: 'Total Diskon',
                   value: 'Rp ${_f(r.totalLoss)}',
-                  label: 'Total Kerugian',
-                  color: 0xFF8B0000,
+                  icon: Icons.discount_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF8B0000), Color(0xFF5C0000)]),
+                  onTap: () => _showFinancialDetail(
+                    'Total Diskon & Potongan',
+                    'Semua bentuk pengurangan revenue',
+                    Icons.discount_rounded,
+                    const Color(0xFF8B0000),
+                    [
+                      _DetailItem(title: 'Komplain (Refund 30%)', value: 'Rp ${_f(r.totalLossFromComplaints)}', description: 'Pengembalian dana 30% dari harga produk karena komplain', color: AppColors.error),
+                      _DetailItem(title: 'Ongkir Gratis', value: 'Rp ${_f(r.totalShippingLoss)}', description: 'Selisih ongkir yang dibayar toko (promo gratis ongkir)', color: AppColors.error),
+                      _DetailItem(title: 'Diskon Voucher', value: 'Rp ${_f(r.totalVoucherLoss)}', description: 'Potongan harga dari voucher yang dipakai customer', color: AppColors.error),
+                      _DetailItem(title: 'Diskon Dompet (2%)', value: 'Rp ${_f(r.totalWalletDiscountLoss)}', description: 'Diskon 2% dari total belanja yang dibayar dari dompet digital RC', color: AppColors.error),
+                    ],
+                  ),
                 ),
-                _MiniStatCard(
-                  icon: Icons.account_balance_wallet_outlined,
+                _StatCard(
+                  title: 'Fee Admin',
                   value: 'Rp ${_f(r.totalAdminFeeProfit)}',
-                  label: 'Keuntungan Admin',
-                  color: 0xFF1565C0,
+                  icon: Icons.account_balance_wallet_outlined,
+                  gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF0D47A1)]),
+                  onTap: () => _showFinancialDetail(
+                    'Fee Admin',
+                    'Keuntungan dari setiap top-up wallet',
+                    Icons.account_balance_wallet_outlined,
+                    const Color(0xFF1565C0),
+                    [
+                      _DetailItem(title: 'Total Fee Admin', value: 'Rp ${_f(r.totalAdminFeeProfit)}', description: 'Fee admin dari setiap top-up wallet'),
+                      _DetailItem(title: 'Penjelasan', value: '', description: 'Setiap kali user top-up wallet, kami dapat fee admin. Fee ini menambah keuntungan bersih kami.'),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            _InfoCard(
-              title: 'Rincian Kerugian',
-              icon: Icons.info_outline,
-              children: [
-                _Info(label: 'Komplain', value: 'Rp ${_f(r.totalLossFromComplaints)}'),
-                _Info(label: 'Ongkir Gratis', value: 'Rp ${_f(r.totalShippingLoss)}'),
-                _Info(label: 'Diskon Voucher', value: 'Rp ${_f(r.totalVoucherLoss)}'),
-                _Info(label: 'Diskon Dompet', value: 'Rp ${_f(r.totalWalletDiscountLoss)}'),
-              ],
-            ),
-            const SizedBox(height: 10),
+
+            // === ROW 4: Stats ===
             _StatRow(
               children: [
-                _MiniStatCard(
-                  icon: Icons.receipt_long_rounded,
+                _StatCard(
+                  title: 'Total Transaksi',
                   value: '${r.totalOrders}',
-                  label: 'Total Pesanan',
-                  color: 0xFF3D3D3D,
+                  icon: Icons.receipt_long_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF3D3D3D), Color(0xFF1A1A1A)]),
+                  onTap: () => _showFinancialDetail(
+                    'Total Transaksi',
+                    'Semua pesanan dalam sistem',
+                    Icons.receipt_long_rounded,
+                    const Color(0xFF3D3D3D),
+                    [
+                      _DetailItem(title: 'Total Pesanan', value: '${r.totalOrders}', description: 'Semua pesanan (semua status)'),
+                      _DetailItem(title: 'Pesanan Selesai', value: '${r.deliveredOrders}', description: 'Pesanan yang sudah diterima customer', color: AppColors.success),
+                    ],
+                  ),
                 ),
-                _MiniStatCard(
-                  icon: Icons.bar_chart_rounded,
+                _StatCard(
+                  title: 'Rata-rata Transaksi',
                   value: 'Rp ${_f(r.averageOrderValue)}',
-                  label: 'Rata-rata per Transaksi',
-                  color: 0xFF2D2D2D,
+                  icon: Icons.bar_chart_rounded,
+                  gradient: const LinearGradient(colors: [Color(0xFF2D2D2D), Color(0xFF0A0A0A)]),
+                  onTap: () => _showFinancialDetail(
+                    'Rata-rata per Transaksi',
+                    'Revenue rata-rata per pesanan',
+                    Icons.bar_chart_rounded,
+                    const Color(0xFF2D2D2D),
+                    [
+                      _DetailItem(title: 'Revenue Produk', value: 'Rp ${_f(r.totalRevenue)}'),
+                      _DetailItem(title: 'Pesanan Selesai', value: '${r.deliveredOrders}'),
+                      _DetailItem(title: 'Rata-rata', value: 'Rp ${_f(r.averageOrderValue)}', description: 'Revenue ÷ Pesanan Selesai'),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
+
+            // === TREND CHART 7 DAYS ===
+            _TrendChartCard(
+              title: 'Tren Revenue 7 Hari',
+              icon: Icons.show_chart_rounded,
+              trendData: trendData,
+              maxValue: maxTrendValue,
+              trendDays: trendDays,
+            ),
+            const SizedBox(height: 12),
+
+            // === Payment Methods ===
             _InfoCard(
-              title: 'Pendapatan per Metode Bayar',
+              title: 'Revenue per Metode Bayar',
               icon: Icons.payment_rounded,
               children: [
                 _Info(label: 'QRIS', value: 'Rp ${_f(r.qrisRevenue)}'),
-                _Info(
-                  label: 'Dompet Digital',
-                  value: 'Rp ${_f(r.walletRevenue)}',
-                ),
+                _Info(label: 'Dompet Digital', value: 'Rp ${_f(r.walletRevenue)}'),
                 _Info(label: 'COD', value: 'Rp ${_f(r.codRevenue)}'),
               ],
             ),
             const SizedBox(height: 12),
+
+            // === Category ===
             _InfoCard(
-              title: 'Pendapatan per Kategori',
+              title: 'Revenue per Kategori',
               icon: Icons.category_rounded,
               children: r.revenueByCategory.entries.isEmpty
                   ? [_Info(label: 'Belum ada data', value: '-')]
-                  : r.revenueByCategory.entries
-                        .map(
-                          (e) =>
-                              _Info(label: e.key, value: 'Rp ${_f(e.value)}'),
-                        )
-                        .toList(),
-            ),
-            const SizedBox(height: 12),
-            _buildDailyCompactCard(
-              totalDailyRevenue,
-              daysActive,
-              sortedEntries.length,
-              bestDay,
-              sortedEntries,
+                  : r.revenueByCategory.entries.map((e) => _Info(label: e.key, value: 'Rp ${_f(e.value)}')).toList(),
             ),
           ],
         ),
@@ -503,267 +589,89 @@ class _AdminReportScreenState extends State<AdminReportScreen>
     );
   }
 
-  Widget _buildDailyCompactCard(
-    double total,
-    int activeDays,
-    int totalDays,
-    MapEntry<DateTime, DailySummary>? bestDay,
-    List<MapEntry<DateTime, DailySummary>> entries,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderGrey.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.softBlackGradient,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.calendar_month_rounded,
-                    color: AppColors.pureWhite,
-                    size: 14,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Pendapatan Harian (${_startDate.day} ${_monthName(_startDate.month)} - ${_endDate.day} ${_monthName(_endDate.month)})',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.pitchBlack,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.borderGrey),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    _DailyStat(label: 'Total', value: 'Rp ${_f(total)}'),
-                    const SizedBox(width: 16),
-                    _DailyStat(
-                      label: 'Hari Aktif',
-                      value: '$activeDays / $totalDays',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _DailyStat(
-                      label: 'Rata-rata',
-                      value:
-                          'Rp ${_f(activeDays > 0 ? total / activeDays : 0)}',
-                    ),
-                    const SizedBox(width: 16),
-                    if (bestDay != null)
-                      _DailyStat(
-                        label: 'Hari Tertinggi',
-                        value: 'Rp ${_f(bestDay.value.revenue)}',
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.borderGrey),
-          InkWell(
-            onTap: () => _showDailyDetail(entries),
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(14),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.expand_more_rounded,
-                    size: 18,
-                    color: AppColors.softGrey,
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Lihat Rincian Lengkap',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.softGrey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDailyDetail(List<MapEntry<DateTime, DailySummary>> entries) {
-    showModalBottomSheet(
+  // Show financial detail dialog
+  void _showFinancialDetail(String title, String subtitle, IconData icon, Color color, List<_DetailItem> items) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: AppColors.pureWhite,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.borderGrey,
-                  borderRadius: BorderRadius.circular(2),
+                  gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Icon(icon, color: AppColors.pureWhite, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.pureWhite)),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.pureWhite.withValues(alpha: 0.8))),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.softBlackGradient,
-                      borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 16),
+              // Detail Items
+              ...items.map((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 8, height: 8,
+                      margin: const EdgeInsets.only(top: 6),
+                      decoration: BoxDecoration(color: item.color ?? AppColors.softGrey, shape: BoxShape.circle),
                     ),
-                    child: const Icon(
-                      Icons.calendar_month_rounded,
-                      color: AppColors.pureWhite,
-                      size: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Rincian Harian (${_startDate.day} ${_monthName(_startDate.month)} - ${_endDate.day} ${_monthName(_endDate.month)})',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.pitchBlack,
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.lightGrey,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 18,
-                        color: AppColors.pitchBlack,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.pitchBlack)),
+                          if (item.description != null) ...[
+                            const SizedBox(height: 2),
+                            Text(item.description!, style: const TextStyle(fontSize: 11, color: AppColors.softGrey)),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: AppColors.borderGrey),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: entries.length,
-                separatorBuilder: (_, _) =>
-                    const Divider(height: 1, color: AppColors.borderGrey),
-                itemBuilder: (_, i) {
-                  final e = entries[i];
-                  final hasData = e.value.revenue > 0 || e.value.orderCount > 0;
-                  return Container(
+                    Text(item.value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: item.color ?? AppColors.pitchBlack)),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.pitchBlack,
+                    foregroundColor: AppColors.pureWhite,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: hasData
-                                ? AppColors.pitchBlack
-                                : AppColors.lightGrey,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${e.value.date.day}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: hasData
-                                    ? AppColors.pureWhite
-                                    : AppColors.softGrey,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${e.value.date.day} ${_monthName(e.value.date.month)} ${e.value.date.year}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: hasData
-                                      ? AppColors.pitchBlack
-                                      : AppColors.softGrey,
-                                ),
-                              ),
-                              if (e.value.orderCount > 0)
-                                Text(
-                                  '${e.value.orderCount} pesanan',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.softGrey,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          hasData ? 'Rp ${_f(e.value.revenue)}' : '-',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: hasData
-                                ? AppColors.pitchBlack
-                                : AppColors.softGrey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Tutup'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1879,6 +1787,280 @@ class _PdfButton extends StatelessWidget {
                 color: AppColors.pureWhite,
               ),
       ),
+    );
+  }
+}
+
+// ===================== NEW HELPER CLASSES =====================
+
+// Helper class for detail items
+class _DetailItem {
+  final String title;
+  final String value;
+  final String? description;
+  final Color? color;
+
+  _DetailItem({
+    required this.title,
+    required this.value,
+    this.description,
+    this.color,
+  });
+}
+
+// StatCard with tap to show detail
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Gradient gradient;
+  final VoidCallback onTap;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.pitchBlack.withValues(alpha: 0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.pureWhite.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: AppColors.pureWhite, size: 18),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.touch_app, color: AppColors.pureWhite.withValues(alpha: 0.5), size: 14),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.pureWhite,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.pureWhite.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Trend Chart Card with colored bars (red/green based on value)
+class _TrendChartCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Map<int, double> trendData;
+  final double maxValue;
+  final List<DateTime> trendDays;
+
+  const _TrendChartCard({
+    required this.title,
+    required this.icon,
+    required this.trendData,
+    required this.maxValue,
+    required this.trendDays,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderGrey.withValues(alpha: 0.5)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: AppColors.softBlackGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.pureWhite, size: 14),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.pitchBlack,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 140,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxValue > 0 ? maxValue * 1.2 : 100000,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final day = trendDays[group.x.toInt()];
+                      return BarTooltipItem(
+                        '${day.day}/${day.month}\nRp ${_fmt(rod.toY)}',
+                        const TextStyle(
+                          color: AppColors.pureWhite,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final idx = value.toInt();
+                        if (idx < 0 || idx >= trendDays.length) return const SizedBox();
+                        final day = trendDays[idx];
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${day.day}',
+                            style: const TextStyle(fontSize: 10, color: AppColors.softGrey),
+                          ),
+                        );
+                      },
+                      reservedSize: 20,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                gridData: FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                barGroups: trendData.entries.map((entry) {
+                  final isHigh = entry.value >= (maxValue * 0.7);
+                  final isMedium = entry.value >= (maxValue * 0.3) && entry.value < (maxValue * 0.7);
+                  final isLow = entry.value > 0 && entry.value < (maxValue * 0.3);
+                  final hasData = entry.value > 0;
+
+                  Color barColor;
+                  if (!hasData) {
+                    barColor = AppColors.lightGrey;
+                  } else if (isHigh) {
+                    barColor = const Color(0xFF2E7D32); // Green - high
+                  } else if (isMedium) {
+                    barColor = const Color(0xFFF9A825); // Yellow/Amber - medium
+                  } else {
+                    barColor = const Color(0xFFE53935); // Red - low
+                  }
+
+                  return BarChartGroupData(
+                    x: entry.key,
+                    barRods: [
+                      BarChartRodData(
+                        toY: entry.value > 0 ? entry.value : 5,
+                        color: barColor,
+                        width: 24,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LegendItem(color: const Color(0xFF2E7D32), label: 'Tinggi'),
+              const SizedBox(width: 16),
+              _LegendItem(color: const Color(0xFFF9A825), label: 'Sedang'),
+              const SizedBox(width: 16),
+              _LegendItem(color: const Color(0xFFE53935), label: 'Rendah'),
+              const SizedBox(width: 16),
+              _LegendItem(color: AppColors.lightGrey, label: 'Kosong'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(double n) => n.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: AppColors.softGrey),
+        ),
+      ],
     );
   }
 }

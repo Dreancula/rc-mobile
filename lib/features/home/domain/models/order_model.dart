@@ -45,6 +45,7 @@ enum PaymentMethod {
 
 class OrderModel {
   final String id;
+  final String orderNumber; // Auto-generated: RC-001, RC-002, etc.
   final String userId;
   final String userName;
   final String userAddress;
@@ -69,6 +70,7 @@ class OrderModel {
 
   const OrderModel({
     required this.id,
+    required this.orderNumber,
     required this.userId,
     required this.userName,
     required this.userAddress,
@@ -89,10 +91,12 @@ class OrderModel {
     this.courier,
     this.courierService,
     this.estimatedDelivery,
+    this.trackingNumber,
   });
 
   OrderModel copyWith({
     String? id,
+    String? orderNumber,
     String? userId,
     String? userName,
     String? userAddress,
@@ -117,6 +121,7 @@ class OrderModel {
   }) {
     return OrderModel(
       id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
       userId: userId ?? this.userId,
       userName: userName ?? this.userName,
       userAddress: userAddress ?? this.userAddress,
@@ -146,6 +151,7 @@ class OrderModel {
   factory OrderModel.fromMap(Map<String, dynamic> map) {
     return OrderModel(
       id: map['id'] as String,
+      orderNumber: map['orderNumber'] as String? ?? 'RC-000',
       userId: map['userId'] as String,
       userName: map['userName'] as String,
       userAddress: map['userAddress'] as String,
@@ -174,12 +180,14 @@ class OrderModel {
       courier: map['courier'] as String?,
       courierService: map['courierService'] as String?,
       estimatedDelivery: map['estimatedDelivery'] as String?,
+      trackingNumber: map['trackingNumber'] as String?,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'orderNumber': orderNumber,
       'userId': userId,
       'userName': userName,
       'userAddress': userAddress,
@@ -200,6 +208,7 @@ class OrderModel {
       'courier': courier,
       'courierService': courierService,
       'estimatedDelivery': estimatedDelivery,
+      'trackingNumber': trackingNumber,
     };
   }
 }

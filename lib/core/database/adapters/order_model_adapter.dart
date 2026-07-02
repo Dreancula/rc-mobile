@@ -11,6 +11,7 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
     final fields = reader.readByte();
     final model = OrderModel(
       id: reader.readString(),
+      orderNumber: fields >= 3 ? reader.readString() : 'RC-000',
       userId: reader.readString(),
       userName: reader.readString(),
       userAddress: reader.readString(),
@@ -37,14 +38,16 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
       courier: reader.readString(),
       courierService: reader.readString(),
       estimatedDelivery: reader.readString(),
+      trackingNumber: fields >= 3 ? reader.readString() : null,
     );
     return model;
   }
 
   @override
   void write(BinaryWriter writer, OrderModel obj) {
-    writer.writeByte(2);
+    writer.writeByte(3);
     writer.writeString(obj.id);
+    writer.writeString(obj.orderNumber);
     writer.writeString(obj.userId);
     writer.writeString(obj.userName);
     writer.writeString(obj.userAddress);
@@ -74,5 +77,6 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
     writer.writeString(obj.courier ?? '');
     writer.writeString(obj.courierService ?? '');
     writer.writeString(obj.estimatedDelivery ?? '');
+    writer.writeString(obj.trackingNumber ?? '');
   }
 }

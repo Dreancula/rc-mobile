@@ -11,6 +11,16 @@ import 'adapters/order_model_adapter.dart';
 import 'adapters/category_model_adapter.dart';
 import 'adapters/chat_message_model_adapter.dart';
 
+// Conversation types for filtering
+enum ConversationType { private, order }
+
+class ConversationInfo {
+  final String email;
+  final ConversationType type;
+
+  ConversationInfo({required this.email, required this.type});
+}
+
 class HiveDb {
   HiveDb._();
 
@@ -720,6 +730,16 @@ class HiveDb {
     }
   }
 
+  Future<void> updateOrderTracking(String orderId, String trackingNumber) async {
+    final order = ordersBox.get(orderId);
+    if (order != null) {
+      await ordersBox.put(
+        orderId,
+        order.copyWith(trackingNumber: trackingNumber),
+      );
+    }
+  }
+
   Future<void> updatePaymentProof(String orderId, String proofUrl) async {
     final order = ordersBox.get(orderId);
     if (order != null) {
@@ -736,18 +756,48 @@ class HiveDb {
     final all = messagesBox.values
         .map((e) => ChatMessageModel.fromMap(Map<String, dynamic>.from(e)))
         .where((m) =>
-            m.senderEmail == userEmail || m.senderEmail == 'admin@admin.com')
+            // Messages from this user
+            (m.senderEmail == userEmail) ||
+            // Messages from admin TO this user
+            (m.senderRole == 'admin' && m.receiverEmail == userEmail))
         .toList();
     all.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     return all;
+  }
+
+  List<ConversationInfo> getAllConversations() {
+    final seen = <String, ConversationInfo>{};
+    for (final raw in messagesBox.values) {
+      final m = ChatMessageModel.fromMap(Map<String, dynamic>.from(raw));
+      // User sent a message (private chat)
+      if (m.senderRole == 'user') {
+        seen[m.senderEmail] = ConversationInfo(
+          email: m.senderEmail,
+          type: ConversationType.private,
+        );
+      }
+      // Admin sent a message to a user (order chat)
+      if (m.senderRole == 'admin' && m.receiverEmail != null) {
+        seen[m.receiverEmail!] = ConversationInfo(
+          email: m.receiverEmail!,
+          type: ConversationType.order,
+        );
+      }
+    }
+    return seen.values.toList();
   }
 
   List<String> getAllConversationUsers() {
     final seen = <String>{};
     for (final raw in messagesBox.values) {
       final m = ChatMessageModel.fromMap(Map<String, dynamic>.from(raw));
+      // User sent a message
       if (m.senderRole == 'user') {
         seen.add(m.senderEmail);
+      }
+      // Admin sent a message to a user (has receiverEmail)
+      if (m.senderRole == 'admin' && m.receiverEmail != null) {
+        seen.add(m.receiverEmail!);
       }
     }
     return seen.toList();

@@ -444,7 +444,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            Translations.of('order_label', context).replaceAll('%s', order.id.substring(order.id.length - 6)),
+                            Translations.of('order_label', context).replaceAll('%s', order.orderNumber),
                             style: AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 2),
@@ -1051,50 +1051,116 @@ class _OrderDetailsSheet extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.pureWhite.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.receipt_long,
-              color: AppColors.pureWhite,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pesanan #${order.id.substring(order.id.length - 6)}',
-                  style: AppTextStyles.priceText.copyWith(color: AppColors.pureWhite),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.pureWhite.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  order.statusDisplay,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.pureWhite.withValues(alpha: 0.7),
+                child: const Icon(
+                  Icons.receipt_long,
+                  color: AppColors.pureWhite,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pesanan ${order.orderNumber}',
+                      style: AppTextStyles.priceText.copyWith(color: AppColors.pureWhite),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      order.statusDisplay,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.pureWhite.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.pureWhite.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _formatDate(order.orderDate),
+                  style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.pureWhite),
+                ),
+              ),
+            ],
+          ),
+          // Show courier and tracking info for shipped orders
+          if (order.courier != null && order.courier!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.pureWhite.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.pureWhite.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.local_shipping,
+                      color: AppColors.pureWhite,
+                      size: 18,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${order.courier} ${order.courierService ?? ''}',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.pureWhite,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (order.trackingNumber != null && order.trackingNumber!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                'No. Resi: ',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.pureWhite.withValues(alpha: 0.7),
+                                ),
+                              ),
+                              Text(
+                                order.trackingNumber!,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.pureWhite,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.pureWhite.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              _formatDate(order.orderDate),
-              style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.pureWhite),
-            ),
-          ),
+          ],
         ],
       ),
     );

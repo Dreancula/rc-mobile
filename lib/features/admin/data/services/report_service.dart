@@ -2,7 +2,9 @@ import 'package:rc_mobile_v2/core/database/hive_db.dart';
 import 'package:rc_mobile_v2/features/home/domain/models/order_model.dart';
 
 class FinancialReport {
-  final double totalRevenue;
+  final double totalRevenue;           // Revenue dari produk (EXCLUDE shipping)
+  final double totalShippingCollected; // Ongkos kirim yang dikumpulkan (pass-through)
+  final double totalGrossSales;       // Total penjualan kotor (produk + shipping)
   final double totalLoss;
   final double totalLossFromComplaints;
   final double totalShippingLoss;
@@ -24,6 +26,8 @@ class FinancialReport {
 
   const FinancialReport({
     required this.totalRevenue,
+    required this.totalShippingCollected,
+    required this.totalGrossSales,
     required this.totalLoss,
     required this.totalLossFromComplaints,
     required this.totalShippingLoss,
@@ -148,7 +152,13 @@ class ReportService {
 
     final delivered = filtered.where((o) => o.status == OrderStatus.delivered).toList();
 
-    final totalRevenue = delivered.fold<double>(0, (s, o) => s + o.totalPrice);
+    // Product Revenue = totalPrice - shippingCost (pendapatan dari produk, exclude ongkir)
+    final totalRevenue = delivered.fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
+    // Shipping Collected = total ongkir yang dikumpulkan dari customer
+    final totalShippingCollected = delivered.fold<double>(0, (s, o) => s + o.shippingCost);
+    // Gross Sales = totalPrice keseluruhan (produk + ongkir)
+    final totalGrossSales = delivered.fold<double>(0, (s, o) => s + o.totalPrice);
+
     final totalLossFromComplaints = _db.getTotalLossFromComplaints();
     final totalShippingLoss = _db.getTotalShippingLoss();
     final totalVoucherLoss = _db.getTotalVoucherLoss();
@@ -157,12 +167,13 @@ class ReportService {
     final totalAdminFeeProfit = _db.getTotalAdminFeeProfit();
     final netSavings = totalRevenue - totalLoss + totalAdminFeeProfit;
 
+    // Revenue per payment method (hanya produk, exclude shipping)
     final qrisRevenue = delivered.where((o) => o.paymentMethod == PaymentMethod.qris)
-        .fold<double>(0, (s, o) => s + o.totalPrice);
+        .fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
     final walletRevenue = delivered.where((o) => o.paymentMethod == PaymentMethod.wallet)
-        .fold<double>(0, (s, o) => s + o.totalPrice);
+        .fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
     final codRevenue = delivered.where((o) => o.paymentMethod == PaymentMethod.cod)
-        .fold<double>(0, (s, o) => s + o.totalPrice);
+        .fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
 
     final catMap = <String, double>{};
     for (final order in delivered) {
@@ -175,7 +186,7 @@ class ReportService {
     final todayRevenue = delivered.where((o) {
       final d = o.deliveredDate;
       return d != null && '${d.year}-${d.month}-${d.day}' == todayStr;
-    }).fold<double>(0, (s, o) => s + o.totalPrice);
+    }).fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
 
     final days = <DateTime, DailySummary>{};
     for (int i = 0; i < 31; i++) {
@@ -184,7 +195,7 @@ class ReportService {
       final dayRevenue = delivered.where((o) {
         final d = o.deliveredDate;
         return d != null && '${d.year}-${d.month}-${d.day}' == dayStr;
-      }).fold<double>(0, (s, o) => s + o.totalPrice);
+      }).fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
       final dayOrders = delivered.where((o) {
         final d = o.deliveredDate;
         return d != null && '${d.year}-${d.month}-${d.day}' == dayStr;
@@ -200,6 +211,8 @@ class ReportService {
 
     return FinancialReport(
       totalRevenue: totalRevenue,
+      totalShippingCollected: totalShippingCollected,
+      totalGrossSales: totalGrossSales,
       totalLoss: totalLoss,
       totalLossFromComplaints: totalLossFromComplaints,
       totalShippingLoss: totalShippingLoss,
@@ -238,7 +251,8 @@ class ReportService {
 
     orders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
 
-    final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPrice);
+    // Revenue dari produk (exclude shipping)
+    final totalRevenue = orders.fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
 
     return TransactionReport(
       orders: orders,
@@ -295,10 +309,11 @@ class ReportService {
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(year, month, day);
       final dayStr = '${date.year}-${date.month}-${date.day}';
+      // Revenue dari produk (exclude shipping)
       final dayRevenue = orders.where((o) {
         final d = o.deliveredDate;
         return d != null && '${d.year}-${d.month}-${d.day}' == dayStr;
-      }).fold<double>(0, (s, o) => s + o.totalPrice);
+      }).fold<double>(0, (s, o) => s + (o.totalPrice - o.shippingCost));
       final dayOrders = orders.where((o) {
         final d = o.deliveredDate;
         return d != null && '${d.year}-${d.month}-${d.day}' == dayStr;
