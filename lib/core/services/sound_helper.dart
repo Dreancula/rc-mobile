@@ -7,9 +7,20 @@ class SoundHelper {
   SoundHelper._();
 
   static final AudioPlayer _player = AudioPlayer();
-  static String? _cachedPath;
+  static String? _cachedFallbackPath;
+
+  static const String _assetPath = 'audio/notification_sound.mp3';
 
   static Future<void> playNotificationSound() async {
+    try {
+      await _player.stop();
+      await _player.play(AssetSource(_assetPath));
+    } catch (_) {
+      await _playFallbackBeep();
+    }
+  }
+
+  static Future<void> _playFallbackBeep() async {
     try {
       final path = await _getOrGenerateBeep();
       if (path != null) {
@@ -20,8 +31,8 @@ class SoundHelper {
   }
 
   static Future<String?> _getOrGenerateBeep() async {
-    if (_cachedPath != null && await File(_cachedPath!).exists()) {
-      return _cachedPath;
+    if (_cachedFallbackPath != null && await File(_cachedFallbackPath!).exists()) {
+      return _cachedFallbackPath;
     }
 
     try {
@@ -29,8 +40,8 @@ class SoundHelper {
       final file = File('${dir.path}/notif_beep.wav');
 
       if (await file.exists()) {
-        _cachedPath = file.path;
-        return _cachedPath;
+        _cachedFallbackPath = file.path;
+        return _cachedFallbackPath;
       }
 
       final sampleRate = 22050;
@@ -81,8 +92,8 @@ class SoundHelper {
       }
 
       await file.writeAsBytes(data);
-      _cachedPath = file.path;
-      return _cachedPath;
+      _cachedFallbackPath = file.path;
+      return _cachedFallbackPath;
     } catch (_) {
       return null;
     }

@@ -3,6 +3,7 @@ import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/product_image.dart';
+import '../../../../core/localization/translations.dart';
 import '../../data/repositories/order_repository.dart';
 import '../../domain/models/order_model.dart';
 import 'chat_screen.dart';
@@ -22,19 +23,12 @@ class _HistoryScreenState extends State<HistoryScreen>
   final HiveDb _db = HiveDb.instance;
   late TabController _tabController;
 
-  final List<_TabItem> _tabs = [
-    _TabItem(label: 'Semua', status: null),
-    _TabItem(label: 'Diproses', status: 'processing'),
-    _TabItem(label: 'Dikirim', status: 'shipped'),
-    _TabItem(label: 'Selesai', status: 'delivered'),
-  ];
-
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() => _selectedIndex = _tabController.index);
@@ -48,11 +42,21 @@ class _HistoryScreenState extends State<HistoryScreen>
     super.dispose();
   }
 
+  List<_TabItem> _getTabs() {
+    return [
+      _TabItem(label: Translations.of('all', context), status: null),
+      _TabItem(label: Translations.of('status_processing', context), status: 'processing'),
+      _TabItem(label: Translations.of('status_shipped', context), status: 'shipped'),
+      _TabItem(label: Translations.of('status_delivered', context), status: 'delivered'),
+    ];
+  }
+
   List<OrderModel> _getFilteredOrders() {
     final session = _db.getUserSession();
     final userId = session?['id'] ?? '';
     final orders = _orderRepo.getUserOrders(userId);
-    final status = _tabs[_selectedIndex].status;
+    final tabs = _getTabs();
+    final status = tabs[_selectedIndex].status;
     if (status == null) return orders.where((o) => o.items.isNotEmpty).toList();
     if (status == 'processing') {
       return orders
@@ -90,12 +94,12 @@ class _HistoryScreenState extends State<HistoryScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Konfirmasi Pesanan'),
-        content: const Text('Apakah pesanan sudah diterima?'),
+        title: Text(Translations.of('confirm_order', context)),
+        content: Text(Translations.of('order_received_question', context)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
+            child: Text(Translations.of('cancel', context)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -110,7 +114,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text('Sudah Diterima'),
+            child: Text(Translations.of('already_received', context)),
           ),
         ],
       ),
@@ -160,7 +164,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             const Icon(Icons.check_circle, size: 16, color: AppColors.success),
             const SizedBox(width: 6),
             Text(
-              'Sudah Diulas',
+              Translations.of('already_reviewed', context),
               style: AppTextStyles.labelMedium.copyWith(
                 fontWeight: FontWeight.w600,
                 color: AppColors.success,
@@ -192,7 +196,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             ),
             const SizedBox(width: 6),
             Text(
-              'Berikan Ulasan',
+              Translations.of('give_review', context),
               style: AppTextStyles.labelMedium.copyWith(
                 fontWeight: FontWeight.w600,
                 color: AppColors.pitchBlack,
@@ -238,7 +242,7 @@ class _HistoryScreenState extends State<HistoryScreen>
           ),
           const SizedBox(width: 10),
           Text(
-            'Pesanan Saya',
+            Translations.of('my_orders_title', context),
             style: AppTextStyles.heading3.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: -0.5,
@@ -330,7 +334,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             unselectedLabelColor: AppColors.softGrey,
             labelStyle: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
             unselectedLabelStyle: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w500),
-            tabs: _tabs.map((tab) => Tab(text: tab.label)).toList(),
+            tabs: _getTabs().map((tab) => Tab(text: tab.label)).toList(),
           ),
         ),
       ),
@@ -364,12 +368,12 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Belum ada pesanan',
+                Translations.of('no_orders_yet', context),
                 style: AppTextStyles.heading4.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
-                'Mulai belanja dan pesananmu\nakan muncul di sini',
+                Translations.of('start_shopping_orders', context),
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.softGrey,
                   height: 1.5,
@@ -440,7 +444,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Pesanan #${order.id.substring(order.id.length - 6)}',
+                            Translations.of('order_label', context).replaceAll('%s', order.id.substring(order.id.length - 6)),
                             style: AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 2),
@@ -473,7 +477,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total',
+                              Translations.of('total_label', context),
                               style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                             ),
                             Text(
@@ -513,7 +517,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                               ),
                               SizedBox(width: 4),
                               Text(
-                                'Pesanan Diterima',
+                                Translations.of('order_received', context),
                                 style: AppTextStyles.caption.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.pureWhite,
@@ -563,7 +567,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Detail',
+                                        Translations.of('order_detail', context),
                                         style: AppTextStyles.caption.copyWith(
                                           fontWeight: FontWeight.w600,
                                           color: AppColors.pitchBlack,
@@ -619,7 +623,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                                         ),
                                         SizedBox(width: 4),
                                         Text(
-                                          'Komplain',
+                                          Translations.of('complain', context),
                                           style: AppTextStyles.caption.copyWith(
                                             fontWeight: FontWeight.w600,
                                             color: AppColors.error,
@@ -652,7 +656,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                                       ),
                                       SizedBox(width: 4),
                                       Text(
-                                        'Sudah Dikomplain',
+                                        Translations.of('already_complained', context),
                                         style: AppTextStyles.labelSmall.copyWith(color: AppColors.softGrey),
                                       ),
                                     ],
@@ -759,8 +763,8 @@ class _HistoryScreenState extends State<HistoryScreen>
                 const SizedBox(height: 2),
                 Text(
                   order.items.length > 1
-                      ? '+${order.items.length - 1} item lainnya'
-                      : '1 item',
+                      ? Translations.of('more_items', context).replaceAll('%s', '${order.items.length - 1}')
+                      : Translations.of('one_item', context),
                   style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                 ),
               ],
@@ -878,7 +882,7 @@ class _OrderDetailsSheet extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Detail Pesanan',
+                  Translations.of('order_detail', context),
                   style: AppTextStyles.heading4.copyWith(fontWeight: FontWeight.w700),
                 ),
                 GestureDetector(
@@ -999,7 +1003,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                   const SizedBox(height: 12),
                   _buildSummaryCard(),
                   const SizedBox(height: 12),
-                  _buildShippingTimeline(),
+                  _buildShippingTimeline(context),
                   if (onConfirmReceived != null) ...[
                     const SizedBox(height: 16),
                     SizedBox(
@@ -1016,7 +1020,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                           elevation: 0,
                         ),
                         child: Text(
-                          'Pesanan Sudah Diterima',
+                          Translations.of('order_received', context),
                           style: AppTextStyles.priceTextSmall.copyWith(color: AppColors.pureWhite),
                         ),
                       ),
@@ -1188,7 +1192,7 @@ class _OrderDetailsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildShippingTimeline() {
+  Widget _buildShippingTimeline(BuildContext ctx) {
     final isPast = <bool>[
       order.status == OrderStatus.processing ||
           order.status == OrderStatus.shipped ||
@@ -1213,9 +1217,9 @@ class _OrderDetailsSheet extends StatelessWidget {
     ];
 
     final steps = [
-      ('Barang Dikemas', Icons.inventory_2_rounded),
-      ('Barang Dikirim', Icons.local_shipping_rounded),
-      ('Barang Diterima', Icons.check_circle_rounded),
+      (Translations.of('package_packed', ctx), Icons.inventory_2_rounded),
+      (Translations.of('package_shipped', ctx), Icons.local_shipping_rounded),
+      (Translations.of('package_received', ctx), Icons.check_circle_rounded),
     ];
 
     return Container(
@@ -1243,7 +1247,7 @@ class _OrderDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Status Pengiriman',
+                Translations.of('shipping_status', ctx),
                 style: AppTextStyles.priceTextSmall.copyWith(fontWeight: FontWeight.w700),
               ),
             ],

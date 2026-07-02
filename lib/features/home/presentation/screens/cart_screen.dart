@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/localization/translations.dart';
 import '../../data/repositories/cart_repository.dart';
 import '../widgets/cart_item_card.dart';
 
@@ -43,12 +44,12 @@ class _CartScreenState extends State<CartScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusL),
         ),
-        title: const Text('Hapus Item'),
-        content: Text('Hapus "$itemName" dari keranjang?'),
+        title: Text(Translations.of('remove_item', context)),
+        content: Text('${Translations.of('remove_item_confirm', context)} "$itemName"'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            child: Text(Translations.of('cancel', context)),
           ),
           TextButton(
             onPressed: () {
@@ -57,7 +58,7 @@ class _CartScreenState extends State<CartScreen> {
               _refreshCart();
             },
             child: Text(
-              'Hapus',
+              Translations.of('delete', context),
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
             ),
           ),
@@ -86,10 +87,10 @@ class _CartScreenState extends State<CartScreen> {
       ),
       title: Column(
         children: [
-          const Text('Keranjang Belanja', style: AppTextStyles.heading4),
+          Text(Translations.of('shopping_cart', context), style: AppTextStyles.heading4),
           if (!_cart.isEmpty)
             Text(
-              '${_cart.itemCount} item',
+              '${_cart.itemCount} ${Translations.of('items_count', context)}',
               style: AppTextStyles.caption,
             ),
         ],
@@ -105,13 +106,12 @@ class _CartScreenState extends State<CartScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppConstants.radiusL),
                   ),
-                  title: const Text('Kosongkan Keranjang'),
-                  content: const Text(
-                      'Hapus semua item dari keranjang belanja?'),
+                  title: Text(Translations.of('clear_cart', context)),
+                  content: Text(Translations.of('clear_cart_confirm', context)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Batal'),
+                      child: Text(Translations.of('cancel', context)),
                     ),
                     TextButton(
                       onPressed: () {
@@ -120,7 +120,7 @@ class _CartScreenState extends State<CartScreen> {
                         _refreshCart();
                       },
                       child: Text(
-                        'Kosongkan',
+                        Translations.of('clear_all', context),
                         style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
                       ),
                     ),
@@ -128,7 +128,7 @@ class _CartScreenState extends State<CartScreen> {
                 ),
               );
             },
-            child: const Text('Hapus Semua'),
+            child: Text(Translations.of('clear_all', context)),
           ),
       ],
     );
@@ -156,14 +156,14 @@ class _CartScreenState extends State<CartScreen> {
             ),
             const SizedBox(height: AppConstants.spacingL),
             Text(
-              'Keranjang Kosong',
+              Translations.of('empty_cart', context),
               style: AppTextStyles.heading3.copyWith(
                 color: AppColors.softGrey,
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
-              'Belum ada produk yang\nditambahkan ke keranjang',
+              Translations.of('no_products_added', context),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.softGrey,
               ),
@@ -180,7 +180,7 @@ class _CartScreenState extends State<CartScreen> {
                     vertical: AppConstants.spacingM,
                   ),
                 ),
-                child: const Text('Mulai Belanja'),
+                child: Text(Translations.of('start_shopping', context)),
               ),
             ),
           ],
@@ -254,8 +254,8 @@ class _CartScreenState extends State<CartScreen> {
               Expanded(
                 child: Text(
                   subtotal >= freeShippingThreshold
-                      ? '🎉 Anda mendapat gratis ongkir!'
-                      : 'Sisa ${CartRepository.formatPrice(remaining)} untuk gratis ongkir',
+                      ? Translations.of('free_shipping_earned', context)
+                      : Translations.of('remaining_for_free_shipping', context).replaceAll('%s', CartRepository.formatPrice(remaining)),
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.primaryBlack,
                     fontWeight: FontWeight.w500,
@@ -338,7 +338,7 @@ class _CartScreenState extends State<CartScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Checkout', style: AppTextStyles.buttonText),
+                    Text(Translations.of('checkout', context), style: AppTextStyles.buttonText),
                     const SizedBox(width: AppConstants.spacingS),
                     const Icon(
                       Icons.arrow_forward,

@@ -3,6 +3,7 @@ import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/localization/translations.dart';
 
 class AdminWalletScreen extends StatefulWidget {
   const AdminWalletScreen({super.key});
@@ -32,19 +33,22 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
   // ===== GET TOP UPS WITH FILTER =====
   List<Map<String, dynamic>> get _filteredTopUps {
-    if (_statusFilter == 'Semua') return _pendingTopUps;
+    final allLabel = Translations.of('all', context);
+    final waitingLabel = Translations.of('waiting', context);
+    final confirmedLabel = Translations.of('confirmed', context);
+    final rejectedLabel = Translations.of('rejected', context);
+
+    if (_statusFilter == allLabel) return _pendingTopUps;
     return _pendingTopUps.where((t) {
       final status = t['status'] as String? ?? 'pending';
-      switch (_statusFilter) {
-        case 'Menunggu':
-          return status == 'pending';
-        case 'Dikonfirmasi':
-          return status == 'completed';
-        case 'Ditolak':
-          return status == 'cancelled';
-        default:
-          return true;
+      if (_statusFilter == waitingLabel) {
+        return status == 'pending';
+      } else if (_statusFilter == confirmedLabel) {
+        return status == 'completed';
+      } else if (_statusFilter == rejectedLabel) {
+        return status == 'cancelled';
       }
+      return true;
     }).toList();
   }
 
@@ -60,8 +64,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     _loadPending();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Top up dikonfirmasi'),
+      SnackBar(
+        content: Text(Translations.of('topup_confirmed', context)),
         backgroundColor: AppColors.primaryBlack,
         behavior: SnackBarBehavior.floating,
       ),
@@ -73,8 +77,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     _loadPending();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Top up ditolak'),
+      SnackBar(
+        content: Text(Translations.of('topup_rejected', context)),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
       ),
@@ -108,9 +112,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'Manajemen Dompet Digital',
-                      style: TextStyle(
+                    Text(
+                      Translations.of('digital_wallet_management', context),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppColors.pitchBlack,
@@ -157,7 +161,12 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                   height: 34,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    children: ['Semua', 'Menunggu', 'Dikonfirmasi', 'Ditolak']
+                    children: [
+                      Translations.of('all', context),
+                      Translations.of('waiting', context),
+                      Translations.of('confirmed', context),
+                      Translations.of('rejected', context),
+                    ]
                         .map((s) {
                           final sel = s == _statusFilter;
                           return Padding(
@@ -211,14 +220,14 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Tidak ada permintaan top up',
+                          Translations.of('no_topup_requests', context),
                           style: AppTextStyles.heading4.copyWith(
                             color: AppColors.softGrey,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Permintaan top up dari user akan muncul di sini',
+                          Translations.of('topup_requests_appear_here', context),
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: AppColors.softGrey,
                           ),
@@ -259,8 +268,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         ? AppColors.warning
         : (isCompleted ? AppColors.success : AppColors.error);
     final statusText = isPending
-        ? 'Menunggu'
-        : (isCompleted ? 'Dikonfirmasi' : 'Ditolak');
+        ? Translations.of('waiting', context)
+        : (isCompleted ? Translations.of('confirmed', context) : Translations.of('rejected', context));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -337,9 +346,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Jumlah',
-                style: TextStyle(fontSize: 12, color: AppColors.softGrey),
+              Text(
+                Translations.of('amount', context),
+                style: const TextStyle(fontSize: 12, color: AppColors.softGrey),
               ),
               Text(
                 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
@@ -356,9 +365,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Tanggal',
-                  style: TextStyle(fontSize: 12, color: AppColors.softGrey),
+                Text(
+                  Translations.of('date', context),
+                  style: const TextStyle(fontSize: 12, color: AppColors.softGrey),
                 ),
                 Text(
                   '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
@@ -386,8 +395,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
-                        'Konfirmasi',
+                      child: Text(
+                        Translations.of('confirm_topup', context),
                         style: AppTextStyles.buttonText,
                       ),
                     ),
@@ -406,7 +415,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text('Tolak'),
+                      child: Text(Translations.of('reject_topup', context)),
                     ),
                   ),
                 ),

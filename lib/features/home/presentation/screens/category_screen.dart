@@ -215,7 +215,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
   // HEADER
   // ============================================================
   Widget _buildHeader() {
-    final totalProducts = _filteredProducts.length;
     final hasFilters = _searchQuery.isNotEmpty || _selectedSort != 'Terbaru';
 
     return Padding(
@@ -263,21 +262,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     ),
                   ),
                 ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.pitchBlack,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  totalProducts.toString(),
-                  style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.pureWhite),
-                ),
-              ),
             ],
           ),
         ],

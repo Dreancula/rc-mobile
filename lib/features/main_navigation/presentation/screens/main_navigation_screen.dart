@@ -87,6 +87,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget _buildHomeScreen() {
     return HomeScreen(
       onProductTap: _navigateToProductDetail,
+      onNavigateToOrders: () {
+        setState(() {
+          _currentIndex = 3;
+          _screens[3] = HistoryScreen();
+        });
+      },
     );
   }
 
@@ -124,13 +130,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => CheckoutScreen(
-          onOrderSuccess: () {
+          onOrderSuccess: (orderId) {
             Navigator.popUntil(context, (route) => route.isFirst);
             setState(() {
               _screens[0] = _buildHomeScreen();
+              _currentIndex = 3;
+              _screens[3] = HistoryScreen();
             });
           },
-          onBack: () => Navigator.pop(context),
+          onBack: () => Navigator.popUntil(context, (route) => route.isFirst),
         ),
       ),
     );
@@ -147,7 +155,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       MaterialPageRoute(
         builder: (context) => ProductDetailScreen(
           product: product,
-          onAddToCart: _navigateToCart,
+          onAddToCart: () {
+            setState(() {});
+          },
+          onBuyNow: _navigateToCheckout,
+          onCartTap: () => _navigateToCart(),
         ),
       ),
     ).then((_) {
@@ -189,7 +201,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 index: 0,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home,
-                label: 'Home',
+                label: Translations.of('nav_home', context),
                 showBadge: _cart.itemCount > 0,
                 badgeCount: _cart.itemCount,
               ),
@@ -197,20 +209,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 index: 1,
                 icon: Icons.category_outlined,
                 activeIcon: Icons.category,
-                label: 'Kategori',
+                label: Translations.of('nav_category', context),
               ),
               _buildAISpecialNavItem(),
               _buildNavItem(
                 index: 3,
                 icon: Icons.receipt_long_outlined,
                 activeIcon: Icons.receipt_long,
-                label: 'Riwayat',
+                label: Translations.of('nav_history', context),
               ),
               _buildNavItem(
                 index: 4,
                 icon: Icons.person_outline,
                 activeIcon: Icons.person,
-                label: 'Profil',
+                label: Translations.of('nav_profile', context),
               ),
             ],
           ),
@@ -437,7 +449,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 _ProfileMenuItem(
                   icon: Icons.favorite_outline,
-                  title: 'Wishlist',
+                  title: Translations.of('wishlist', context),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const WishlistScreen()),
@@ -461,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 _ProfileMenuItem(
                   icon: Icons.confirmation_num_outlined,
-                  title: 'Voucher',
+                  title: Translations.of('voucher', context),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const VoucherScreen()),
@@ -588,19 +600,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         child: Row(
           children: [
-            Expanded(child: _statItem('Diproses', '$diproses', Icons.receipt_outlined, () {
+            Expanded(child: _statItem(Translations.of('status_processing', context), '$diproses', Icons.receipt_outlined, () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryScreen())).then((_) => _refresh());
             })),
             _statDivider(),
-            Expanded(child: _statItem('Dikirim', '$dikirim', Icons.local_shipping_outlined, () {
+            Expanded(child: _statItem(Translations.of('status_shipped', context), '$dikirim', Icons.local_shipping_outlined, () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryScreen())).then((_) => _refresh());
             })),
             _statDivider(),
-            Expanded(child: _statItem('Selesai', '$selesai', Icons.check_circle_outline, () {
+            Expanded(child: _statItem(Translations.of('status_delivered', context), '$selesai', Icons.check_circle_outline, () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryScreen())).then((_) => _refresh());
             })),
             _statDivider(),
-            Expanded(child: _statItem('Poin', '$points', Icons.stars_rounded, () {
+            Expanded(child: _statItem(Translations.of('order_points', context), '$points', Icons.stars_rounded, () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const PointsScreen())).then((_) => _refresh());
             })),
           ],
@@ -1138,21 +1150,21 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
             const SizedBox(height: 20),
             Icon(Icons.location_on_rounded, size: 32, color: AppColors.pitchBlack),
             const SizedBox(height: 12),
-            const Text(
-              'Alamat Pengiriman',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.pitchBlack),
+            Text(
+              Translations.of('shipping_address', context),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.pitchBlack),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Lengkapi alamat untuk melanjutkan',
-              style: TextStyle(fontSize: 14, color: AppColors.softGrey),
+            Text(
+              Translations.of('complete_address', context),
+              style: const TextStyle(fontSize: 14, color: AppColors.softGrey),
             ),
             const SizedBox(height: 24),
             TextFormField(
               controller: _phoneCtrl,
-              decoration: _inputDec('No. Telepon', Icons.phone_outlined),
+              decoration: _inputDec(Translations.of('phone_number_hint', context), Icons.phone_outlined),
               keyboardType: TextInputType.phone,
-              validator: (v) => (v == null || v.isEmpty) ? 'No. telepon harus diisi' : null,
+              validator: (v) => (v == null || v.isEmpty) ? Translations.of('phone_required_error', context) : null,
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -1162,7 +1174,7 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                 icon: _locating
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.my_location_rounded, size: 20),
-                label: Text(_locating ? 'Mendeteksi lokasi...' : 'Deteksi Lokasi Saya'),
+                label: Text(_locating ? Translations.of('detecting_location', context) : Translations.of('detect_my_location', context)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.pitchBlack,
                   side: const BorderSide(color: AppColors.pitchBlack),
@@ -1173,7 +1185,7 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedProvince.isEmpty ? null : _selectedProvince,
-              decoration: _inputDec('Provinsi', Icons.map_outlined),
+              decoration: _inputDec(Translations.of('province', context), Icons.map_outlined),
               items: IndonesiaRegions.provinces.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
               onChanged: (v) {
                 if (v != null) setState(() {
@@ -1182,26 +1194,26 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                   _cities = IndonesiaRegions.citiesByProvince[v] ?? [];
                 });
               },
-              validator: (v) => v == null || v.isEmpty ? 'Pilih provinsi' : null,
+              validator: (v) => v == null || v.isEmpty ? Translations.of('province_required', context) : null,
               dropdownColor: AppColors.pureWhite,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedCity.isEmpty ? null : _selectedCity,
-              decoration: _inputDec('Kota/Kabupaten', Icons.location_city_outlined),
+              decoration: _inputDec(Translations.of('city_regency', context), Icons.location_city_outlined),
               items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
               onChanged: (v) {
                 if (v != null) setState(() => _selectedCity = v);
               },
-              validator: (v) => v == null || v.isEmpty ? 'Pilih kota' : null,
+              validator: (v) => v == null || v.isEmpty ? Translations.of('city_required', context) : null,
               dropdownColor: AppColors.pureWhite,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _addressCtrl,
-              decoration: _inputDec('Detail alamat (jalan, gang, no. rumah)', Icons.location_on_outlined),
+              decoration: _inputDec(Translations.of('address_detail_hint', context), Icons.location_on_outlined),
               maxLines: 2,
-              validator: (v) => (v == null || v.isEmpty) ? 'Detail alamat harus diisi' : null,
+              validator: (v) => (v == null || v.isEmpty) ? Translations.of('address_detail_required', context) : null,
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -1223,7 +1235,7 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                           valueColor: AlwaysStoppedAnimation<Color>(AppColors.pureWhite),
                         ),
                       )
-                    : const Text('Simpan Alamat', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    : Text(Translations.of('save_address', context), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
             const SizedBox(height: 24),

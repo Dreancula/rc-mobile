@@ -65,6 +65,7 @@ class OrderModel {
   final String? courier;
   final String? courierService;
   final String? estimatedDelivery;
+  final String? trackingNumber;
 
   const OrderModel({
     required this.id,
@@ -112,6 +113,7 @@ class OrderModel {
     String? courier,
     String? courierService,
     String? estimatedDelivery,
+    String? trackingNumber,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -135,6 +137,7 @@ class OrderModel {
       courier: courier ?? this.courier,
       courierService: courierService ?? this.courierService,
       estimatedDelivery: estimatedDelivery ?? this.estimatedDelivery,
+      trackingNumber: trackingNumber ?? this.trackingNumber,
     );
   }
 

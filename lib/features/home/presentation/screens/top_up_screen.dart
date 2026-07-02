@@ -613,9 +613,11 @@ class _TopUpScreenState extends State<TopUpScreen> {
                       color: AppColors.pureWhite,
                     ),
                   )
-                : const Text(
+                : Text(
                     'Sudah Bayar',
-                    style: AppTextStyles.labelLarge,
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.pureWhite,
+                    ),
                   ),
           ),
         ),

@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/custom_icons.dart';
 import '../../../../core/widgets/product_image.dart';
+import '../../../../core/localization/translations.dart';
 import '../../data/repositories/cart_repository.dart';
 import '../../../notifications/presentation/screens/notification_screen.dart';
 import '../../domain/models/product_model.dart';
@@ -24,12 +25,14 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onSearchTap;
   final VoidCallback? onCartTap;
   final Function(ProductModel)? onProductTap;
+  final VoidCallback? onNavigateToOrders;
 
   const HomeScreen({
     super.key,
     this.onSearchTap,
     this.onCartTap,
     this.onProductTap,
+    this.onNavigateToOrders,
   });
 
   @override
@@ -111,6 +114,12 @@ class _HomeScreenState extends State<HomeScreen> {
           product: product,
           onAddToCart: () {
             _updateCartCount();
+          },
+          onBuyNow: () {
+            _updateCartCount();
+            _navigateToCheckout();
+          },
+          onCartTap: () {
             _navigateToCart();
           },
         ),
@@ -148,10 +157,11 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => CheckoutScreen(
-          onOrderSuccess: () {
+          onOrderSuccess: (orderId) {
             Navigator.popUntil(context, (route) => route.isFirst);
+            widget.onNavigateToOrders?.call();
           },
-          onBack: () => Navigator.pop(context),
+          onBack: () => Navigator.popUntil(context, (route) => route.isFirst),
         ),
       ),
     );
@@ -180,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(context),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.pitchBlack,
@@ -197,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildDompetCard(),
                           const SizedBox(height: AppConstants.spacingL),
                           _buildSectionHeader(
-                            title: 'Kategori',
+                            title: Translations.of('category', context),
                             onViewAll: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -209,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: AppConstants.spacingL),
                           _buildSectionHeader(
                             title: _selectedCategory == 'All'
-                                ? 'Produk'
+                                ? Translations.of('products', context)
                                 : _selectedCategory,
                             onViewAll: () => Navigator.push(
                               context,
@@ -234,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ===== HEADER =====
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     final userName = _db.getUserSession()?['name'] ?? 'User';
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -257,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: 'Hey, ',
+                        text: Translations.of('hey_user', context),
                         style: AppTextStyles.heading2.copyWith(
                           color: AppColors.pitchBlack,
                         ),
@@ -273,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: AppConstants.spacingXS),
                 Text(
-                  'Discover your style',
+                  Translations.of('discover_style', context),
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.softGrey,
                     letterSpacing: 0.2,
@@ -384,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         SizedBox(width: 4),
                         Text(
-                          'Top Up',
+                          Translations.of('top_up', context),
                           style: AppTextStyles.labelMedium.copyWith(
                             color: AppColors.primaryBlack,
                             fontWeight: FontWeight.w600,
@@ -398,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'Dompet Digital RC',
+              Translations.of('digital_wallet_rc', context),
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.pureWhite.withValues(alpha: 0.7),
               ),
@@ -434,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '$points Poin',
+                      '$points ${Translations.of('points', context)}',
                       style: AppTextStyles.labelMedium.copyWith(
                         color: AppColors.pureWhite,
                         fontWeight: FontWeight.w600,
@@ -493,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               children: [
                 Text(
-                  'Lihat Semua',
+                  Translations.of('view_all', context),
                   style: AppTextStyles.labelMedium.copyWith(
                     color: AppColors.charcoal,
                     fontWeight: FontWeight.w500,
@@ -726,7 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'Stok Terbatas',
+                          Translations.of('limited_stock', context),
                           style: AppTextStyles.bodyXSmall.copyWith(
                             fontWeight: FontWeight.w600,
                             color: AppColors.pureWhite,
@@ -765,8 +775,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       product.reviewCount > 0
-                          ? '${product.reviewCount} ulasan'
-                          : 'Baru',
+                          ? '${product.reviewCount} ${Translations.of('reviews_count', context)}'
+                          : Translations.of('new_item', context),
                       style: AppTextStyles.bodyXSmall.copyWith(
                         color: AppColors.softGrey,
                       ),
@@ -803,12 +813,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
-              'Tidak ada produk',
+              Translations.of('no_products_found', context),
               style: AppTextStyles.heading4.copyWith(color: AppColors.charcoal),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
-              'Produk untuk kategori ini belum tersedia',
+              Translations.of('no_products_category', context),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.softGrey,
               ),

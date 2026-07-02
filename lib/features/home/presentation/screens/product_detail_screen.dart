@@ -1,20 +1,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/database/hive_db.dart';
+import '../../../../core/localization/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/product_image.dart';
 import '../../domain/models/product_model.dart';
 import '../../data/repositories/cart_repository.dart';
 
+
 class ProductDetailScreen extends StatefulWidget {
   final ProductModel product;
   final VoidCallback onAddToCart;
+  final VoidCallback? onBuyNow;
+  final VoidCallback? onCartTap;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
     required this.onAddToCart,
+    this.onBuyNow,
+    this.onCartTap,
   });
 
   @override
@@ -80,6 +86,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       Future.delayed(const Duration(milliseconds: 500), () {
         setState(() => _isLoading = false);
         widget.onAddToCart();
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showToast(e.toString(), isSuccess: false);
+    }
+  }
+
+  void _buyNow() {
+    if (_isLoading) return;
+
+    final cart = CartRepository();
+    try {
+      setState(() => _isLoading = true);
+
+      cart.addItem(
+        product: _product,
+        selectedSize: _sizes[_selectedSizeIndex],
+        quantity: _quantity,
+      );
+
+      _showToast('${_product.name} ditambahkan ke keranjang', isSuccess: true);
+
+      Future.delayed(const Duration(milliseconds: 500), () {
+        setState(() => _isLoading = false);
+        widget.onBuyNow?.call();
       });
     } catch (e) {
       setState(() => _isLoading = false);
@@ -175,6 +206,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
       actions: [
         _buildCircleButton(
+          Icons.shopping_bag_outlined,
+          onTap: () => widget.onCartTap?.call(),
+          badgeCount: CartRepository().itemCount,
+        ),
+        _buildCircleButton(
           Icons.share_outlined,
           onTap: () => _showToast('Fitur share segera hadir'),
         ),
@@ -232,8 +268,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     IconData icon, {
     VoidCallback? onTap,
     Color? color,
+    int? badgeCount,
   }) {
-    return Container(
+    final button = Container(
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: AppColors.pureWhite.withValues(alpha: 0.95),
@@ -252,6 +289,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         padding: const EdgeInsets.all(8),
       ),
     );
+
+    if (badgeCount != null && badgeCount > 0) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          button,
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Text(
+                badgeCount > 9 ? '9+' : '$badgeCount',
+                style: const TextStyle(
+                  color: AppColors.pureWhite,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return button;
   }
 
   // ===== CATEGORY & RATING =====
@@ -837,6 +909,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildBottomBar() {
     final total = _product.price * _quantity;
     final isAvailable = _product.stockForSize(_sizes[_selectedSizeIndex]) > 0;
+    final hasBuyNow = widget.onBuyNow != null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -851,72 +924,126 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Total',
-                  style: AppTextStyles.bodyXSmall.copyWith(
-                    color: AppColors.softGrey,
-                  ),
+        child: _isLoading
+            ? const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                Text(
-                  CartRepository.formatPrice(total),
-                  style: AppTextStyles.heading4.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: isAvailable ? _addToCart : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isAvailable
-                      ? AppColors.pitchBlack
-                      : AppColors.softGrey,
-                  foregroundColor: AppColors.pureWhite,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.pureWhite,
+              )
+            : Row(
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total',
+                        style: AppTextStyles.bodyXSmall.copyWith(
+                          color: AppColors.softGrey,
                         ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isAvailable
-                                ? Icons.shopping_bag_outlined
-                                : Icons.block,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isAvailable ? 'Tambah ke Keranjang' : 'Stok Habis',
-                            style: AppTextStyles.labelLarge.copyWith(
-                              color: AppColors.pureWhite,
-                            ),
-                          ),
-                        ],
                       ),
+                      Text(
+                        CartRepository.formatPrice(total),
+                        style: AppTextStyles.heading4.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  if (hasBuyNow) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: isAvailable ? _addToCart : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isAvailable
+                              ? AppColors.pitchBlack
+                              : AppColors.softGrey,
+                          side: BorderSide(
+                            color: isAvailable
+                                ? AppColors.pitchBlack
+                                : AppColors.softGrey,
+                          ),
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          isAvailable
+                              ? Translations.of('add_to_cart', context)
+                              : 'Stok Habis',
+                          style: AppTextStyles.labelLarge,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isAvailable ? _buyNow : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isAvailable
+                              ? AppColors.pitchBlack
+                              : AppColors.softGrey,
+                          foregroundColor: AppColors.pureWhite,
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          isAvailable
+                              ? Translations.of('buy_now', context)
+                              : 'Stok Habis',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.pureWhite,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isAvailable ? _addToCart : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isAvailable
+                              ? AppColors.pitchBlack
+                              : AppColors.softGrey,
+                          foregroundColor: AppColors.pureWhite,
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isAvailable
+                                  ? Icons.shopping_bag_outlined
+                                  : Icons.block,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isAvailable
+                                  ? Translations.of('add_to_cart', context)
+                                  : 'Stok Habis',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.pureWhite,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }

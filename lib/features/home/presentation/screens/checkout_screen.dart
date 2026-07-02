@@ -3,6 +3,7 @@ import '../../../../core/database/hive_db.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/product_image.dart';
+import '../../../../core/localization/translations.dart';
 import '../../data/repositories/cart_repository.dart';
 import '../../data/repositories/order_repository.dart';
 import '../../data/services/shipping_calculator.dart';
@@ -10,7 +11,7 @@ import '../../domain/models/order_model.dart';
 import 'top_up_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
-  final VoidCallback onOrderSuccess;
+  final ValueChanged<String> onOrderSuccess;
   final VoidCallback onBack;
 
   const CheckoutScreen({
@@ -32,13 +33,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isProcessing = false;
   ShippingResult? _shippingResult;
   bool _shippingLoading = false;
+  String? _lastOrderId;
 
   List<Map<String, dynamic>> _availableVouchers = [];
   Map<String, dynamic>? _selectedVoucher;
   bool _useVoucher = false;
 
   final List<Map<String, dynamic>> _paymentMethods = [
-    {'name': 'Dompet Digital', 'icon': Icons.account_balance_wallet_outlined},
+    {'name': 'Digital Wallet', 'icon': Icons.account_balance_wallet_outlined},
     {'name': 'COD', 'icon': Icons.money_outlined},
   ];
 
@@ -114,7 +116,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // ============================================================
   Future<void> _processOrder() async {
     if (_selectedCourier == null) {
-      _showToast('Pilih kurir pengiriman terlebih dahulu');
+      _showToast(Translations.of('select_courier_first', context));
       return;
     }
 
@@ -149,6 +151,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         courierService: courier.service,
         estimatedDelivery: courier.etd,
       );
+      _lastOrderId = orderId;
 
       if (_selectedPaymentMethod == PaymentMethod.wallet) {
         await HiveDb.instance.deductWallet(_grandTotal);
@@ -207,15 +210,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Saldo Tidak Mencukupi',
+            Text(
+              Translations.of('insufficient_balance', context),
               style: AppTextStyles.heading4,
             ),
             const SizedBox(height: 8),
             Text(
-              'Saldo dompet digital Anda sebesar\n'
+              '${Translations.of('your_balance_is', context)}'
               'Rp ${_formatRupiah(_walletBalance)}\n'
-              'Top up terlebih dahulu untuk melanjutkan.',
+              '${Translations.of('top_up_first_to_continue', context)}',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               textAlign: TextAlign.center,
             ),
@@ -232,14 +235,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: const Text('Top Up Sekarang'),
+                child: Text(Translations.of('top_up_now', context)),
               ),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: Text(
-                'Ganti Metode Bayar',
+                Translations.of('change_payment_method', context),
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               ),
             ),
@@ -275,13 +278,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Scan QRIS',
+            Text(
+              Translations.of('scan_qris', context),
               style: AppTextStyles.heading4,
             ),
             const SizedBox(height: 8),
             Text(
-              'Scan QR code di atas\nuntuk melakukan pembayaran',
+              Translations.of('scan_qr_to_pay', context),
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               textAlign: TextAlign.center,
             ),
@@ -303,7 +306,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: const Text('Sudah Bayar'),
+                child: Text(Translations.of('already_paid', context)),
               ),
             ),
             const SizedBox(height: 8),
@@ -314,7 +317,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 widget.onBack();
               },
               child: Text(
-                'Bayar Nanti',
+                Translations.of('pay_later', context),
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               ),
             ),
@@ -347,13 +350,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Pesanan Berhasil!',
+            Text(
+              Translations.of('order_success_title', context),
               style: AppTextStyles.heading4,
             ),
             const SizedBox(height: 8),
             Text(
-              'Terima kasih telah berbelanja\ndi Republik Casual',
+              Translations.of('thank_you_shopping', context),
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
               textAlign: TextAlign.center,
             ),
@@ -367,13 +370,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 children: [
                   Text(
-                    'Status Pesanan',
+                    Translations.of('order_status', context),
                     style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                   ),
                   Text(
                     _selectedPaymentMethod == PaymentMethod.wallet
-                        ? 'Pembayaran Berhasil'
-                        : 'Menunggu Konfirmasi',
+                        ? Translations.of('payment_successful', context)
+                        : Translations.of('waiting_confirmation', context),
                     style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -387,7 +390,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                widget.onOrderSuccess();
+                widget.onOrderSuccess(_lastOrderId ?? '');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.pitchBlack,
@@ -397,7 +400,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('Lihat Pesanan'),
+              child: Text(Translations.of('view_order', context)),
             ),
           ),
           TextButton(
@@ -406,7 +409,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               widget.onBack();
             },
             child: Text(
-              'Kembali ke Beranda',
+              Translations.of('back_to_home', context),
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.softGrey),
             ),
           ),
@@ -477,7 +480,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         onPressed: widget.onBack,
       ),
       title: Text(
-        'Checkout',
+        Translations.of('checkout', context),
         style: AppTextStyles.heading4.copyWith(fontWeight: FontWeight.w700),
       ),
       centerTitle: true,
@@ -529,7 +532,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final name = session?['name'] as String? ?? 'Customer';
 
     return _buildSectionCard(
-      title: 'Alamat Pengiriman',
+      title: Translations.of('shipping_address', context),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -587,7 +590,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // ============================================================
   Widget _buildCourierSection() {
     return _buildSectionCard(
-      title: 'Kurir Pengiriman',
+      title: Translations.of('courier_shipping', context),
       child: _shippingLoading
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
@@ -597,7 +600,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
-                'Alamat tidak dikenali.\nPastikan alamat mencakup nama kota.',
+                Translations.of('address_not_recognized', context),
                 style: AppTextStyles.caption,
               ),
             )
@@ -615,7 +618,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Estimasi jarak: ~${_shippingResult!.estimatedDistanceKm} km',
+                          Translations.of('distance_estimate', context).replaceAll('%s', '${_shippingResult!.estimatedDistanceKm}'),
                           style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                         ),
                       ],
@@ -654,7 +657,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Estimasi ${opt.etd}',
+                                  Translations.of('eta_estimate', context).replaceAll('%s', opt.etd),
                                   style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                                 ),
                               ],
@@ -687,7 +690,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // ============================================================
   Widget _buildPaymentMethod() {
     return _buildSectionCard(
-      title: 'Metode Pembayaran',
+      title: Translations.of('payment_method', context),
       child: Row(
         children: List.generate(_paymentMethods.length, (index) {
           final method = _paymentMethods[index];
@@ -750,7 +753,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final isInsufficient = _walletBalance < _grandTotal;
 
     return _buildSectionCard(
-      title: 'Dompet Digital RC',
+      title: Translations.of('digital_wallet_rc', context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -773,7 +776,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Saldo Tersedia',
+                      Translations.of('available_balance', context),
                       style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                     ),
                     const SizedBox(height: 2),
@@ -803,7 +806,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      'Top Up',
+                      Translations.of('top_up', context),
                       style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.pureWhite),
                     ),
                   ),
@@ -829,7 +832,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Diskon dompet 2%: -${CartRepository.formatPrice(_walletDiscount)}',
+                      Translations.of('wallet_discount', context).replaceAll('%s', CartRepository.formatPrice(_walletDiscount)),
                       style: AppTextStyles.labelMedium.copyWith(color: Colors.green, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -858,7 +861,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Saldo tidak mencukupi. Top up terlebih dahulu.',
+                      Translations.of('balance_insufficient_topup', context),
                       style: AppTextStyles.labelMedium.copyWith(color: AppColors.error),
                     ),
                   ),
@@ -878,7 +881,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_availableVouchers.isEmpty) return const SizedBox.shrink();
 
     return _buildSectionCard(
-      title: 'Voucher Diskon',
+      title: Translations.of('discount_voucher', context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -990,8 +993,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(width: 6),
                 Text(
                   _canUseVoucher
-                      ? 'Voucher akan diterapkan saat pembayaran'
-                      : 'Tidak tersedia untuk COD',
+                      ? Translations.of('voucher_will_apply', context)
+                      : Translations.of('not_available_cod', context),
                   style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                 ),
               ],
@@ -1010,8 +1013,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Ringkasan Pesanan',
+          Text(
+            Translations.of('order_summary', context),
             style: AppTextStyles.labelLarge,
           ),
           const SizedBox(height: 10),
@@ -1066,9 +1069,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: 4),
           _buildSummaryRow(
-            'Pengiriman',
+            Translations.of('shipping', context),
             _shippingCost == 0
-                ? 'GRATIS'
+                ? Translations.of('free', context)
                 : CartRepository.formatPrice(_shippingCost),
             valueColor: _shippingCost == 0 ? Colors.green : null,
           ),
@@ -1144,7 +1147,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Total Pembayaran',
+                  Translations.of('total_payment', context),
                   style: AppTextStyles.bodyXSmall.copyWith(color: AppColors.softGrey),
                 ),
                 Text(
@@ -1177,8 +1180,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       )
                     : Text(
                         _selectedPaymentMethod == PaymentMethod.wallet
-                            ? 'Bayar dengan Dompet'
-                            : 'Buat Pesanan',
+                            ? Translations.of('pay_with_wallet', context)
+                            : Translations.of('place_order', context),
                         style: AppTextStyles.buttonText,
                       ),
               ),
