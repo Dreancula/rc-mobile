@@ -27,6 +27,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isFavorite = false;
   late List<String> _sizes;
   bool _isLoading = false;
+  int _currentImageIndex = 0;
 
   @override
   void initState() {
@@ -163,6 +164,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ===== SLIVER APP BAR =====
   Widget _buildSliverAppBar() {
+    final images = _product.images;
     return SliverAppBar(
       expandedHeight: 350,
       pinned: true,
@@ -186,21 +188,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            ProductImage(imageUrl: _product.imageUrl, fit: BoxFit.cover),
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.transparent,
-                    AppColors.pureWhite.withValues(alpha: 0.8),
-                  ],
+            if (images.length > 1)
+              PageView.builder(
+                itemCount: images.length,
+                onPageChanged: (i) => setState(() => _currentImageIndex = i),
+                itemBuilder: (context, index) => ProductImage(
+                  imageUrl: images[index],
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              ProductImage(imageUrl: _product.imageUrl, fit: BoxFit.cover),
+            if (images.length > 1)
+              Positioned(
+                bottom: 16,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(images.length, (index) {
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: _currentImageIndex == index ? 24 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _currentImageIndex == index
+                            ? AppColors.pureWhite
+                            : AppColors.pureWhite.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
                 ),
               ),
-            ),
           ],
         ),
       ),

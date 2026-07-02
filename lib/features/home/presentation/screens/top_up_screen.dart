@@ -85,6 +85,7 @@ class _TopUpScreenState extends State<TopUpScreen> {
         'userEmail': _sessionEmail,
         'userName': _sessionName,
         'amount': _selectedAmount,
+        'adminFee': _adminFee,
         'status': 'pending',
         'timestamp': DateTime.now().toIso8601String(),
       };

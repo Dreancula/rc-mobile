@@ -52,6 +52,9 @@ class OrderModel {
   final List<ProductModel> items;
   final double totalPrice;
   final double shippingCost;
+  final double actualShippingCost;
+  final double voucherDiscount;
+  final double walletDiscount;
   final OrderStatus status;
   final PaymentMethod paymentMethod;
   final String? paymentProof;
@@ -72,6 +75,9 @@ class OrderModel {
     required this.items,
     required this.totalPrice,
     required this.shippingCost,
+    this.actualShippingCost = 0,
+    this.voucherDiscount = 0,
+    this.walletDiscount = 0,
     this.status = OrderStatus.pending,
     required this.paymentMethod,
     this.paymentProof,
@@ -93,6 +99,9 @@ class OrderModel {
     List<ProductModel>? items,
     double? totalPrice,
     double? shippingCost,
+    double? actualShippingCost,
+    double? voucherDiscount,
+    double? walletDiscount,
     OrderStatus? status,
     PaymentMethod? paymentMethod,
     String? paymentProof,
@@ -113,6 +122,9 @@ class OrderModel {
       items: items ?? this.items,
       totalPrice: totalPrice ?? this.totalPrice,
       shippingCost: shippingCost ?? this.shippingCost,
+      actualShippingCost: actualShippingCost ?? this.actualShippingCost,
+      voucherDiscount: voucherDiscount ?? this.voucherDiscount,
+      walletDiscount: walletDiscount ?? this.walletDiscount,
       status: status ?? this.status,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentProof: paymentProof ?? this.paymentProof,
@@ -140,6 +152,9 @@ class OrderModel {
           .toList(),
       totalPrice: (map['totalPrice'] as num).toDouble(),
       shippingCost: (map['shippingCost'] as num?)?.toDouble() ?? 0,
+      actualShippingCost: (map['actualShippingCost'] as num?)?.toDouble() ?? 0,
+      voucherDiscount: (map['voucherDiscount'] as num?)?.toDouble() ?? 0,
+      walletDiscount: (map['walletDiscount'] as num?)?.toDouble() ?? 0,
       status: OrderStatus.values[map['status'] as int? ?? 0],
       paymentMethod: PaymentMethod.values[map['paymentMethod'] as int? ?? 0],
       paymentProof: map['paymentProof'] as String?,
@@ -169,6 +184,9 @@ class OrderModel {
       'items': items.map((e) => e.toMap()).toList(),
       'totalPrice': totalPrice,
       'shippingCost': shippingCost,
+      'actualShippingCost': actualShippingCost,
+      'voucherDiscount': voucherDiscount,
+      'walletDiscount': walletDiscount,
       'status': status.index,
       'paymentMethod': paymentMethod.index,
       'paymentProof': paymentProof,

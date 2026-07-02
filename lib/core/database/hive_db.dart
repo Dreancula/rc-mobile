@@ -29,7 +29,7 @@ class HiveDb {
   static const String _reviewsBoxName = 'reviews_box';
   static const String _notificationsBoxName = 'notifications_box';
 
-  static const int _dbVersion = 10;
+  static const int _dbVersion = 11;
   static const String _versionKey = 'db_version';
 
   Box<CartItemModel>? _cartBox;
@@ -231,7 +231,7 @@ class HiveDb {
         'price': 149000,
         'rating': 0,
         'reviewCount': 0,
-        'imageUrl': 'assets/images/products/T Shirt.png',
+        'images': ['assets/images/products/T Shirt.png'],
         'category': 'T-Shirt',
         'isFavorite': false,
         'isActive': true,
@@ -246,7 +246,7 @@ class HiveDb {
         'price': 279000,
         'rating': 0,
         'reviewCount': 0,
-        'imageUrl': 'assets/images/products/Celana.png',
+        'images': ['assets/images/products/Celana.png'],
         'category': 'Celana',
         'isFavorite': false,
         'isActive': true,
@@ -261,7 +261,7 @@ class HiveDb {
         'price': 249000,
         'rating': 0,
         'reviewCount': 0,
-        'imageUrl': 'assets/images/products/Kemeja.png',
+        'images': ['assets/images/products/Kemeja.png'],
         'category': 'Kemeja',
         'isFavorite': false,
         'isActive': true,
@@ -276,7 +276,7 @@ class HiveDb {
         'price': 329000,
         'rating': 0,
         'reviewCount': 0,
-        'imageUrl': 'assets/images/products/Hoodie.png',
+        'images': ['assets/images/products/Hoodie.png'],
         'category': 'Hoodie',
         'isFavorite': false,
         'isActive': true,
@@ -291,7 +291,7 @@ class HiveDb {
         'price': 99000,
         'rating': 0,
         'reviewCount': 0,
-        'imageUrl': 'assets/images/products/Topi.png',
+        'images': ['assets/images/products/Topi.png'],
         'category': 'Topi',
         'isFavorite': false,
         'isActive': true,
@@ -953,6 +953,36 @@ class HiveDb {
   double getTotalLossFromComplaints() {
     final complaints = getComplaints().where((c) => c['status'] == 'resolved').toList();
     return complaints.fold<double>(0, (sum, c) => sum + ((c['refundAmount'] as num?)?.toDouble() ?? 0));
+  }
+
+  double getTotalShippingLoss() {
+    final delivered = getOrders().where((o) => o.status == OrderStatus.delivered).toList();
+    return delivered.fold<double>(0, (sum, o) {
+      final loss = o.actualShippingCost - o.shippingCost;
+      return sum + (loss > 0 ? loss : 0);
+    });
+  }
+
+  double getTotalVoucherLoss() {
+    final delivered = getOrders().where((o) => o.status == OrderStatus.delivered).toList();
+    return delivered.fold<double>(0, (sum, o) => sum + o.voucherDiscount);
+  }
+
+  double getTotalWalletDiscountLoss() {
+    final delivered = getOrders().where((o) => o.status == OrderStatus.delivered).toList();
+    return delivered.fold<double>(0, (sum, o) => sum + o.walletDiscount);
+  }
+
+  double getTotalLoss() {
+    return getTotalLossFromComplaints() +
+        getTotalShippingLoss() +
+        getTotalVoucherLoss() +
+        getTotalWalletDiscountLoss();
+  }
+
+  double getTotalAdminFeeProfit() {
+    final records = getTopUpRecords().where((r) => r['status'] == 'completed').toList();
+    return records.fold<double>(0, (sum, r) => sum + ((r['adminFee'] as num?)?.toDouble() ?? 0));
   }
 
   // ===== VOUCHERS =====

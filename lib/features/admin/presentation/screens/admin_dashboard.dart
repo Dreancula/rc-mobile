@@ -22,25 +22,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   double _getTotalLoss() {
-    return _db.getTotalLossFromComplaints();
+    return _db.getTotalLoss();
   }
 
   @override
   Widget build(BuildContext context) {
     final orders = _db.getOrders();
     final delivered = orders.where((o) => o.status == OrderStatus.delivered).toList();
-    final now = DateTime.now();
 
     final totalRevenue = delivered.fold<double>(0, (s, o) => s + o.totalPrice);
     final totalLoss = _getTotalLoss();
-    final totalSavings = totalRevenue - totalLoss;
+    final totalShippingLoss = _db.getTotalShippingLoss();
+    final totalVoucherLoss = _db.getTotalVoucherLoss();
+    final totalWalletDiscountLoss = _db.getTotalWalletDiscountLoss();
+    final totalComplaintLoss = _db.getTotalLossFromComplaints();
+    final totalAdminFeeProfit = _db.getTotalAdminFeeProfit();
+    final totalSavings = totalRevenue - totalLoss + totalAdminFeeProfit;
     final totalOrders = orders.length;
-
-    final todayStr = '${now.year}-${now.month}-${now.day}';
-    final todayRevenue = delivered.where((o) {
-      final d = o.deliveredDate;
-      return d != null && '${d.year}-${d.month}-${d.day}' == todayStr;
-    }).fold<double>(0, (s, o) => s + o.totalPrice);
 
     final avgDaily = delivered.length > 0 ? (totalRevenue / 30) : 0.0;
 
@@ -97,12 +95,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
               )),
               const SizedBox(width: 12),
               Expanded(child: _StatCard(
-                title: 'Hari Ini',
-                value: 'Rp ${_f(todayRevenue)}',
-                icon: Icons.today_rounded,
-                gradient: const LinearGradient(colors: [Color(0xFF333333), Color(0xFF1A1A1A)]),
+                title: 'Keuntungan Admin',
+                value: 'Rp ${_f(totalAdminFeeProfit)}',
+                icon: Icons.account_balance_wallet_outlined,
+                gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF0D47A1)]),
               )),
             ],
+          ),
+          const SizedBox(height: 12),
+          // Loss Breakdown
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.pureWhite,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderGrey.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(gradient: AppColors.softBlackGradient, borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.trending_down_rounded, color: AppColors.pureWhite, size: 14),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Rincian Kerugian', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.pitchBlack)),
+                    const Spacer(),
+                    Text('Rp ${_f(totalLoss)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.error)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _lossRow('Komplain', totalComplaintLoss, totalLoss),
+                _lossRow('Ongkir Gratis', totalShippingLoss, totalLoss),
+                _lossRow('Diskon Voucher', totalVoucherLoss, totalLoss),
+                _lossRow('Diskon Dompet', totalWalletDiscountLoss, totalLoss),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           // Stats Row
@@ -401,6 +432,41 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Text(order.status.displayName, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: statusColors[order.status] ?? AppColors.softGrey)),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lossRow(String label, double value, double total) {
+    final pct = total > 0 ? (value / total * 100).toStringAsFixed(1) : '0.0';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.softGrey)),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: total > 0 ? value / total : 0,
+                backgroundColor: AppColors.lightGrey,
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.error),
+                minHeight: 6,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 90,
+            child: Text(
+              'Rp ${_f(value)} ($pct%)',
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.pitchBlack),
+            ),
           ),
         ],
       ),

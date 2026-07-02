@@ -4,6 +4,11 @@ import 'package:rc_mobile_v2/features/home/domain/models/order_model.dart';
 class FinancialReport {
   final double totalRevenue;
   final double totalLoss;
+  final double totalLossFromComplaints;
+  final double totalShippingLoss;
+  final double totalVoucherLoss;
+  final double totalWalletDiscountLoss;
+  final double totalAdminFeeProfit;
   final double netSavings;
   final int totalOrders;
   final int deliveredOrders;
@@ -20,6 +25,11 @@ class FinancialReport {
   const FinancialReport({
     required this.totalRevenue,
     required this.totalLoss,
+    required this.totalLossFromComplaints,
+    required this.totalShippingLoss,
+    required this.totalVoucherLoss,
+    required this.totalWalletDiscountLoss,
+    required this.totalAdminFeeProfit,
     required this.netSavings,
     required this.totalOrders,
     required this.deliveredOrders,
@@ -139,8 +149,13 @@ class ReportService {
     final delivered = filtered.where((o) => o.status == OrderStatus.delivered).toList();
 
     final totalRevenue = delivered.fold<double>(0, (s, o) => s + o.totalPrice);
-    final totalLoss = _db.getTotalLossFromComplaints();
-    final netSavings = totalRevenue - totalLoss;
+    final totalLossFromComplaints = _db.getTotalLossFromComplaints();
+    final totalShippingLoss = _db.getTotalShippingLoss();
+    final totalVoucherLoss = _db.getTotalVoucherLoss();
+    final totalWalletDiscountLoss = _db.getTotalWalletDiscountLoss();
+    final totalLoss = totalLossFromComplaints + totalShippingLoss + totalVoucherLoss + totalWalletDiscountLoss;
+    final totalAdminFeeProfit = _db.getTotalAdminFeeProfit();
+    final netSavings = totalRevenue - totalLoss + totalAdminFeeProfit;
 
     final qrisRevenue = delivered.where((o) => o.paymentMethod == PaymentMethod.qris)
         .fold<double>(0, (s, o) => s + o.totalPrice);
@@ -186,6 +201,11 @@ class ReportService {
     return FinancialReport(
       totalRevenue: totalRevenue,
       totalLoss: totalLoss,
+      totalLossFromComplaints: totalLossFromComplaints,
+      totalShippingLoss: totalShippingLoss,
+      totalVoucherLoss: totalVoucherLoss,
+      totalWalletDiscountLoss: totalWalletDiscountLoss,
+      totalAdminFeeProfit: totalAdminFeeProfit,
       netSavings: netSavings > 0 ? netSavings : 0,
       totalOrders: filtered.length,
       deliveredOrders: deliveredCount,

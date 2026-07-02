@@ -111,7 +111,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           },
           onProductTap: (productId) {
             final product = HiveDb.instance.getProductById(productId) ??
-              ProductModel(id: '', name: 'Produk', price: 0, imageUrl: '', category: '');
+              ProductModel(id: '', name: 'Produk', price: 0, images: const [], category: '');
             _navigateToProductDetail(product);
           },
         ),

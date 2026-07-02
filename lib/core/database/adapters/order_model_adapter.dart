@@ -8,7 +8,8 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
 
   @override
   OrderModel read(BinaryReader reader) {
-    return OrderModel(
+    final fields = reader.readByte();
+    final model = OrderModel(
       id: reader.readString(),
       userId: reader.readString(),
       userName: reader.readString(),
@@ -17,6 +18,9 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
       items: reader.readList().cast<ProductModel>(),
       totalPrice: reader.readDouble(),
       shippingCost: reader.readDouble(),
+      actualShippingCost: fields >= 2 ? reader.readDouble() : 0,
+      voucherDiscount: fields >= 2 ? reader.readDouble() : 0,
+      walletDiscount: fields >= 2 ? reader.readDouble() : 0,
       status: OrderStatus.values[reader.readInt()],
       paymentMethod: PaymentMethod.values[reader.readInt()],
       paymentProof: reader.readString(),
@@ -34,10 +38,12 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
       courierService: reader.readString(),
       estimatedDelivery: reader.readString(),
     );
+    return model;
   }
 
   @override
   void write(BinaryWriter writer, OrderModel obj) {
+    writer.writeByte(2);
     writer.writeString(obj.id);
     writer.writeString(obj.userId);
     writer.writeString(obj.userName);
@@ -46,6 +52,9 @@ class OrderModelAdapter extends TypeAdapter<OrderModel> {
     writer.writeList(obj.items);
     writer.writeDouble(obj.totalPrice);
     writer.writeDouble(obj.shippingCost);
+    writer.writeDouble(obj.actualShippingCost);
+    writer.writeDouble(obj.voucherDiscount);
+    writer.writeDouble(obj.walletDiscount);
     writer.writeInt(obj.status.index);
     writer.writeInt(obj.paymentMethod.index);
     writer.writeString(obj.paymentProof ?? '');

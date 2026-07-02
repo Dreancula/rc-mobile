@@ -46,11 +46,13 @@ class OrderRepository {
     required List<CartItemModel> cartItems,
     required double subtotal,
     required double shippingCost,
+    double actualShippingCost = 0,
+    double voucherDiscount = 0,
+    double walletDiscount = 0,
     required PaymentMethod paymentMethod,
     String? courier,
     String? courierService,
     String? estimatedDelivery,
-    double voucherDiscount = 0,
   }) async {
     if (cartItems.isEmpty) throw Exception('Keranjang belanja kosong');
 
@@ -94,7 +96,7 @@ class OrderRepository {
           id: cartItem.productId,
           name: cartItem.name,
           price: cartItem.price,
-          imageUrl: cartItem.imageUrl,
+          images: [cartItem.imageUrl],
           category: cartItem.selectedSize,
         ));
       }
@@ -107,8 +109,11 @@ class OrderRepository {
       userAddress: userAddress,
       userPhone: userPhone,
       items: items,
-      totalPrice: (subtotal + shippingCost - voucherDiscount).clamp(0, double.infinity),
+      totalPrice: (subtotal + shippingCost - voucherDiscount - walletDiscount).clamp(0, double.infinity),
       shippingCost: shippingCost,
+      actualShippingCost: actualShippingCost,
+      voucherDiscount: voucherDiscount,
+      walletDiscount: walletDiscount,
       status: paymentMethod == PaymentMethod.cod
           ? OrderStatus.processing
           : OrderStatus.pending,

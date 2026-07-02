@@ -227,7 +227,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late TextEditingController _nameCtrl, _priceCtrl, _descCtrl, _weightCtrl;
   late List<TextEditingController> _sizeStockCtrls;
   late List<String> _sizeLabels;
-  late String _category, _imageUrl;
+  late String _category;
+  late List<String> _images;
   bool _isSaving = false;
 
   bool get _isEditing => widget.product != null;
@@ -242,7 +243,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _descCtrl = TextEditingController(text: p?.description ?? '');
     _weightCtrl = TextEditingController(text: p != null ? p.weight.toStringAsFixed(0) : '');
     _category = p?.category ?? '';
-    _imageUrl = p?.imageUrl ?? '';
+    _images = p?.images.toList() ?? [];
     _sizeLabels = p?.availableSizes.toList() ?? ['S', 'M', 'L', 'XL'];
     _sizeStockCtrls = _sizeLabels.map((s) => TextEditingController(
       text: p != null ? p.stockForSize(s).toString() : '50',
@@ -260,10 +261,19 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   }
 
   Future<void> _pickImage() async {
+    if (_images.length >= 5) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Maksimal 5 foto'),
+          backgroundColor: AppColors.softGrey,
+        ));
+      }
+      return;
+    }
     try {
       if (!mounted) return;
       final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
-      if (picked != null && mounted) setState(() => _imageUrl = picked.path);
+      if (picked != null && mounted) setState(() => _images.add(picked.path));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -286,7 +296,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       id: _isEditing ? widget.product!.id : DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameCtrl.text.trim(),
       price: double.parse(_priceCtrl.text.trim()),
-      imageUrl: _imageUrl,
+      images: List.from(_images),
       category: _category,
       description: _descCtrl.text.trim(),
       stockPerSize: stockPerSize,
@@ -330,41 +340,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        width: double.infinity, height: 180,
-                        decoration: BoxDecoration(color: AppColors.lightGrey, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.borderGrey)),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: _imageUrl.isNotEmpty
-                              ? Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ProductImage(imageUrl: _imageUrl, fit: BoxFit.cover),
-                                    Positioned(
-                                      top: 8, right: 8,
-                                      child: GestureDetector(
-                                        onTap: () => setState(() => _imageUrl = ''),
-                                        child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: AppColors.pitchBlack.withValues(alpha: 0.6), shape: BoxShape.circle), child: const Icon(Icons.close, size: 16, color: AppColors.pureWhite)),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      bottom: 8, left: 0, right: 0,
-                                      child: Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(color: AppColors.pitchBlack.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(20)),
-                                          child: const Text('Tap untuk ganti foto', style: TextStyle(fontSize: 11, color: AppColors.pureWhite)),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : _imgBig(),
-                        ),
-                      ),
-                    ),
+                    _buildImagePicker(),
                     const SizedBox(height: 20),
                     _field('Nama Produk'),
                     const SizedBox(height: 8),
@@ -465,12 +441,70 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
   );
 
-  Widget _imgBig() => Container(color: AppColors.lightGrey, child: const Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      Icon(Icons.image_outlined, size: 48, color: AppColors.softGrey),
-      SizedBox(height: 8),
-      Text('Tap untuk pilih foto', style: TextStyle(fontSize: 13, color: AppColors.softGrey)),
-    ],
-  ));
+  Widget _buildImagePicker() {
+    final crossAxisCount = 3;
+    final totalSlots = (_images.length < 5 ? _images.length + 1 : _images.length);
+    final itemCount = totalSlots;
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1,
+      ),
+      children: List.generate(itemCount, (index) {
+        if (index < _images.length) {
+          final imgPath = _images[index];
+          return Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: ProductImage(imageUrl: imgPath, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+              ),
+              Positioned(
+                top: 4, right: 4,
+                child: GestureDetector(
+                  onTap: () => setState(() => _images.removeAt(index)),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: AppColors.pitchBlack.withValues(alpha: 0.6), shape: BoxShape.circle),
+                    child: const Icon(Icons.close, size: 14, color: AppColors.pureWhite),
+                  ),
+                ),
+              ),
+              if (index == 0)
+                Positioned(
+                  bottom: 4, left: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: AppColors.pitchBlack.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Utama', style: TextStyle(fontSize: 9, color: AppColors.pureWhite)),
+                  ),
+                ),
+            ],
+          );
+        }
+        return GestureDetector(
+          onTap: _pickImage,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderGrey),
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_photo_alternate_outlined, size: 28, color: AppColors.softGrey),
+                SizedBox(height: 4),
+                Text('Tambah', style: TextStyle(fontSize: 11, color: AppColors.softGrey)),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
 }

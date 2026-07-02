@@ -7,17 +7,19 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
 
   @override
   ProductModel read(BinaryReader reader) {
+    final numFields = reader.readInt();
     final id = reader.readString();
     final name = reader.readString();
     final price = reader.readDouble();
     final rating = reader.readDouble();
     final reviewCount = reader.readInt();
-    final imageUrl = reader.readString();
+    final images = (numFields >= 7) ? reader.readStringList() : [reader.readString()];
     final category = reader.readString();
     final isFavorite = reader.readBool();
     final isActive = reader.readBool();
     final description = reader.readString();
-    final sizes = reader.readStringList() ?? ['S', 'M', 'L', 'XL'];
+    List<String> sizes = reader.readStringList();
+    if (sizes.isEmpty) { sizes = ['S', 'M', 'L', 'XL']; }
     final sizeStock = <String, int>{};
     final count = reader.readInt();
     for (int i = 0; i < count; i++) {
@@ -32,7 +34,7 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       price: price,
       rating: rating,
       reviewCount: reviewCount,
-      imageUrl: imageUrl,
+      images: images,
       category: category,
       isFavorite: isFavorite,
       isActive: isActive,
@@ -45,12 +47,13 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
 
   @override
   void write(BinaryWriter writer, ProductModel obj) {
+    writer.writeInt(7);
     writer.writeString(obj.id);
     writer.writeString(obj.name);
     writer.writeDouble(obj.price);
     writer.writeDouble(obj.rating);
     writer.writeInt(obj.reviewCount);
-    writer.writeString(obj.imageUrl);
+    writer.writeStringList(obj.images);
     writer.writeString(obj.category);
     writer.writeBool(obj.isFavorite);
     writer.writeBool(obj.isActive);

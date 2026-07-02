@@ -4,7 +4,7 @@ class ProductModel {
   final double price;
   final double rating;
   final int reviewCount;
-  final String imageUrl;
+  final List<String> images;
   final String category;
   final bool isFavorite;
   final bool isActive;
@@ -13,13 +13,15 @@ class ProductModel {
   final Map<String, int> stockPerSize;
   final double weight;
 
+  String get imageUrl => images.isNotEmpty ? images.first : '';
+
   const ProductModel({
     required this.id,
     required this.name,
     required this.price,
     this.rating = 0,
     this.reviewCount = 0,
-    required this.imageUrl,
+    this.images = const [],
     required this.category,
     this.isFavorite = false,
     this.isActive = true,
@@ -39,7 +41,7 @@ class ProductModel {
     double? price,
     double? rating,
     int? reviewCount,
-    String? imageUrl,
+    List<String>? images,
     String? category,
     bool? isFavorite,
     bool? isActive,
@@ -54,7 +56,7 @@ class ProductModel {
       price: price ?? this.price,
       rating: rating ?? this.rating,
       reviewCount: reviewCount ?? this.reviewCount,
-      imageUrl: imageUrl ?? this.imageUrl,
+      images: images ?? this.images,
       category: category ?? this.category,
       isFavorite: isFavorite ?? this.isFavorite,
       isActive: isActive ?? this.isActive,
@@ -76,13 +78,21 @@ class ProductModel {
       final legacyStock = map['stock'] as int? ?? 0;
       stockPerSize = {for (final s in sizes) s: legacyStock ~/ sizes.length};
     }
+    List<String> images;
+    if (map['images'] != null) {
+      images = (map['images'] as List).cast<String>();
+    } else if (map['imageUrl'] != null) {
+      images = [map['imageUrl'] as String];
+    } else {
+      images = [];
+    }
     return ProductModel(
       id: map['id'] as String,
       name: map['name'] as String,
       price: (map['price'] as num).toDouble(),
       rating: (map['rating'] as num?)?.toDouble() ?? 0,
       reviewCount: map['reviewCount'] as int? ?? 0,
-      imageUrl: map['imageUrl'] as String,
+      images: images,
       category: map['category'] as String,
       isFavorite: map['isFavorite'] as bool? ?? false,
       isActive: map['isActive'] as bool? ?? true,
@@ -100,7 +110,7 @@ class ProductModel {
       'price': price,
       'rating': rating,
       'reviewCount': reviewCount,
-      'imageUrl': imageUrl,
+      'images': images,
       'category': category,
       'isFavorite': isFavorite,
       'isActive': isActive,

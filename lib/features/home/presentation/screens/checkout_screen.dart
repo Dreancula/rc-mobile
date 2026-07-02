@@ -141,11 +141,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         cartItems: _cart.items,
         subtotal: _cart.subtotal,
         shippingCost: _shippingCost,
+        actualShippingCost: courier.cost,
+        voucherDiscount: _voucherValue,
+        walletDiscount: _walletDiscount,
         paymentMethod: _selectedPaymentMethod,
         courier: courier.name,
         courierService: courier.service,
         estimatedDelivery: courier.etd,
-        voucherDiscount: _voucherValue,
       );
 
       if (_selectedPaymentMethod == PaymentMethod.wallet) {

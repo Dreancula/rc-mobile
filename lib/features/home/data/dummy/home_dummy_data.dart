@@ -47,7 +47,7 @@ class HomeDummyData {
       price: 189000,
       rating: 4.8,
       reviewCount: 234,
-      imageUrl: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80'],
       category: 'T-Shirt',
     ),
     ProductModel(
@@ -56,7 +56,7 @@ class HomeDummyData {
       price: 259000,
       rating: 4.6,
       reviewCount: 156,
-      imageUrl: 'https://images.unsplash.com/photo-1625910513413-5fc4e5e40687?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1625910513413-5fc4e5e40687?w=400&q=80'],
       category: 'Shirt',
     ),
     ProductModel(
@@ -65,7 +65,7 @@ class HomeDummyData {
       price: 389000,
       rating: 4.9,
       reviewCount: 412,
-      imageUrl: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&q=80'],
       category: 'Pants',
     ),
     ProductModel(
@@ -74,7 +74,7 @@ class HomeDummyData {
       price: 599000,
       rating: 4.7,
       reviewCount: 89,
-      imageUrl: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&q=80'],
       category: 'Jacket',
     ),
     ProductModel(
@@ -83,7 +83,7 @@ class HomeDummyData {
       price: 459000,
       rating: 4.5,
       reviewCount: 278,
-      imageUrl: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&q=80'],
       category: 'Accessories',
     ),
     ProductModel(
@@ -92,7 +92,7 @@ class HomeDummyData {
       price: 329000,
       rating: 4.4,
       reviewCount: 167,
-      imageUrl: 'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400&q=80'],
       category: 'Shirt',
     ),
     ProductModel(
@@ -101,7 +101,7 @@ class HomeDummyData {
       price: 349000,
       rating: 4.6,
       reviewCount: 203,
-      imageUrl: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400&q=80'],
       category: 'Pants',
     ),
     ProductModel(
@@ -110,7 +110,7 @@ class HomeDummyData {
       price: 219000,
       rating: 4.3,
       reviewCount: 145,
-      imageUrl: 'https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=400&q=80'],
       category: 'T-Shirt',
     ),
     ProductModel(
@@ -119,7 +119,7 @@ class HomeDummyData {
       price: 179000,
       rating: 4.8,
       reviewCount: 321,
-      imageUrl: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80'],
       category: 'Accessories',
     ),
     ProductModel(
@@ -128,7 +128,7 @@ class HomeDummyData {
       price: 429000,
       rating: 4.7,
       reviewCount: 198,
-      imageUrl: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&q=80'],
       category: 'Jacket',
     ),
     ProductModel(
@@ -137,7 +137,7 @@ class HomeDummyData {
       price: 299000,
       rating: 4.5,
       reviewCount: 112,
-      imageUrl: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400&q=80'],
       category: 'Shirt',
     ),
     ProductModel(
@@ -146,7 +146,7 @@ class HomeDummyData {
       price: 249000,
       rating: 4.4,
       reviewCount: 87,
-      imageUrl: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=400&q=80',
+      images: ['https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=400&q=80'],
       category: 'Pants',
     ),
   ];
